@@ -1,0 +1,4 @@
+build/
+dist/
+mods/*/42/media/java/
+*.class

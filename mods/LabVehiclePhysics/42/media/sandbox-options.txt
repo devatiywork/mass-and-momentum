@@ -1,0 +1,85 @@
+VERSION = 1,
+
+option LabVehiclePhysics.VanillaVehicles
+{
+    type = enum,
+    numValues = 2,
+    default = 2,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_VanillaVehicles,
+    valueTranslation = LabVehiclePhysics_VanillaVehiclesValue,
+}
+
+option LabVehiclePhysics.PowerMul
+{
+    type = double,
+    min = 0.5,
+    max = 3.0,
+    default = 1.0,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_PowerMul,
+}
+
+option LabVehiclePhysics.ZombieImpact
+{
+    type = boolean,
+    default = true,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_ZombieImpact,
+}
+
+option LabVehiclePhysics.CorpseFollowsRagdoll
+{
+    type = boolean,
+    default = true,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_CorpseFollowsRagdoll,
+}
+
+option LabVehiclePhysics.AnimalHits
+{
+    type = boolean,
+    default = true,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_AnimalHits,
+}
+
+option LabVehiclePhysics.FuelByMass
+{
+    type = boolean,
+    default = true,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_FuelByMass,
+}
+
+option LabVehiclePhysics.Bushes
+{
+    type = boolean,
+    default = true,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_Bushes,
+}
+
+option LabVehiclePhysics.Trees
+{
+    type = boolean,
+    default = true,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_Trees,
+}
+
+option LabVehiclePhysics.LiveMass
+{
+    type = boolean,
+    default = false,
+    page = LabVehiclePhysics,
+    translation = LabVehiclePhysics_LiveMass,
+}
+
+option LabVehiclePhysics.VehicleTable
+{
+    type = string,
+    default = ,
+    page = LabVehiclePhysicsVehicles,
+    translation = LabVehiclePhysics_VehicleTable,
+}

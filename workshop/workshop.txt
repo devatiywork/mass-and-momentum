@@ -1,0 +1,68 @@
+version=1
+id=3810710740
+title=Mass & Momentum: Vehicle Physics
+description=[h1]Mass & Momentum: Vehicle Physics[/h1]
+description=Vehicles get their real weight, from a 950 kg city car to a 52 t tank, and the physics finally uses it. A tank ploughs through a horde, a hatchback gets stuck in it. Nothing depends on your FPS any more.
+description=[b]Works with [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528]Project Viewpoint[/url][/b], tested together on 42.21.
+description=
+description=[h2]What changes[/h2]
+description=[list]
+description=[*][b]Real masses[/b] for the vanilla fleet and popular military and KI5 mods, other vehicles get a type preset. The engine's hidden 2,400 kg suspension limit is lifted in memory, game files stay untouched.
+description=[*][b]Hitting zombies[/b]: the impact comes from speed and the reduced mass of vehicle and body. Speed above 54 km/h counts now, FPS no longer matters, zombies have different body weight.
+description=[*][b]Bushes and trees[/b]: a bush takes energy instead of capping your speed. A heavy vehicle fells trees by pushing or ramming, the server decides in multiplayer.
+description=[*][b]Animals[/b] brake the vehicle by their weight and take damage by speed and mass instead of dying instantly.
+description=[*][b]Fuel[/b]: real tank sizes, consumption grows with mass.
+description=[*][b]Multiplayer[/b]: the corpse lies where the body landed, not where it was hit. With the second mod everyone sees the body fly.
+description=[*][b]Settings[/b]: sandbox pages "Vehicle Physics" (feature switches, engine power) and "Vehicle Physics: vehicles" (per-vehicle table, 18 presets). A server's table applies to everyone.
+description=[*][b]For vehicle mod authors[/b]: a small Lua API to describe your vehicle, no hard dependency.
+description=[/list]
+description=
+description=[h2]Mods in this item[/h2]
+description=[list]
+description=[*][b]Mass & Momentum: Vehicle Physics[/b] (id LabVehiclePhysics) - the main mod.
+description=[*][b]Mass & Momentum: Multiplayer Ragdolls[/b] (id LabRagdollMP) - optional, lifts the game's ban on ragdolls in multiplayer.
+description=[/list]
+description=
+description=[h2]Requirements[/h2]
+description=[list]
+description=[*]Build 42.21 and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853]ZombieBuddy[/url] with its one-time installer: the mod is Java code. Until ZombieBuddy is updated, use its [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3807686870]temporary 42.21 fix[/url].
+description=[*]Dedicated server: ZombieBuddy on the server too.
+description=[*]Co-op (Host): the mod adds ZombieBuddy to the co-op server itself. Enable the mods in the main menu Mods list too and approve the Java mods with "remember".
+description=[*][b]Ragdolls[/b]: every player turns on Options / Display & Performance / [b]Use Physics Hit Reactions[/b]. In multiplayer it shows unchecked and Apply there really turns it off, so check it once. Server: [b]UsePhysicsHitReaction=true[/b] recommended.
+description=[/list]
+description=The mod only works on servers that list it. Elsewhere your game stays vanilla, no advantage where it was not invited.
+description=
+description=[h2]Compatibility[/h2]
+description=[list]
+description=[*]Adding it to an existing save is fine: vehicles in the world are updated on load.
+description=[*]Other Java mods that rewrite vehicle physics will probably conflict.
+description=[*][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3780639614]Push Vehicle[/url] works, but it scales the push with mass, so even a tank can be pushed by hand. Set its [b]Maximum Pushable Weight (kg)[/b] to about 3500: cars and vans stay pushable, trucks and tanks won't budge.
+description=[*]Viewpoint does not draw Military Tool Kit tanks in first and third person (its issue), so you can ram an invisible 52 t tank.
+description=[/list]
+description=
+description=[h2]Known issues[/h2]
+description=[list]
+description=[*]Tracked vehicles from mods can get stuck on bodies: their road wheels are tiny.
+description=[*]A very violent crash into a very heavy vehicle could make a position invalid. The mod returns the vehicle to its last valid spot and writes "NaN tripwire" to console.txt. Please send that log.
+description=[/list]
+description=Detailed log: [b]-Dlabvehicle.verbose=true[/b] in the launch options before [b]--[/b].
+description=
+description=[hr][/hr]
+description=[h1]Mass & Momentum: физика транспорта[/h1]
+description=Машины получают настоящий вес, от 950 кг у малолитражки до 52 т у танка. Танк проходит сквозь орду, хэтчбек в ней вязнет. От FPS ничего не зависит.
+description=[b]Совместим с [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528]Project Viewpoint[/url][/b], проверено на 42.21.
+description=[list]
+description=[*][b]Массы[/b] ванильных машин, военных модов и KI5, остальным — пресет по типу. Предел подвески 2400 кг снят в памяти.
+description=[*][b]Наезд[/b] — от скорости и приведённой массы, скорость выше 54 км/ч считается, зомби весят по-разному.
+description=[*][b]Кусты[/b] забирают энергию, тяжёлая машина валит [b]деревья[/b] упором или с разгона.
+description=[*][b]Животные[/b] тормозят машину по весу и получают урон по скорости и массе.
+description=[*][b]Топливо[/b]: настоящие баки, расход растёт с массой.
+description=[*][b]Сеть[/b]: труп там, где упало тело; со вторым модом полёт видят все.
+description=[*][b]Настройки[/b]: песочница «Физика транспорта» и «Физика транспорта: машины» (таблица, 18 пресетов).
+description=[/list]
+description=Нужны Build 42.21 и [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853]ZombieBuddy[/url] с установщиком, под 42.21 пока — [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3807686870]временный фикс[/url]. Выделенному серверу ZombieBuddy нужен тоже. Кооп: мод сам добавляет ZombieBuddy на кооп-сервер — включите моды и в главном меню, Java-моды одобрите с «запомнить».
+description=[b]Рэгдоллы[/b]: каждому игроку включить Настройки / «Экран и производительность» / [b]«Использовать рэгдолл-физику»[/b]. В сети галка показана снятой, и «Применить» там её выключает — проверьте один раз. На сервере рекомендуем [b]UsePhysicsHitReaction=true[/b].
+description=Push Vehicle совместим, но силу толчка умножает на массу — руками сдвигается даже танк. Поставьте в его настройках [b]Maximum Pushable Weight (kg)[/b] около 3500: легковушки и фургоны толкаются, грузовики и танки нет.
+description=Viewpoint не рисует танки Military Tool Kit от первого и третьего лица — можно врезаться в невидимый танк.
+tags=Build 42;Vehicles;Realistic;Multiplayer
+visibility=public

@@ -1,0 +1,6 @@
+name=LabVehiclePhysics: author data example
+id=LabVehicleAuthorExample
+description=Reference example for vehicle mod authors: how to describe a vehicle for LabVehiclePhysics without depending on it. Registers passport data for the U.S. M60A3 Patton. Does nothing without LabVehiclePhysics.
+author=Jaime Lannister
+modversion=1.0.0
+versionMin=42.0
