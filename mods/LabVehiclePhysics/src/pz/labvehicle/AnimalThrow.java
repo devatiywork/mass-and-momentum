@@ -5,47 +5,47 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Отлёт животного после удара машиной — без рэгдолла, скольжением по земле.
+ * An animal flying off after a vehicle hit: no ragdoll, it slides along the ground.
  *
- * Рэгдолла у животных в игре нет ({@code IsoAnimal.canRagdoll()} → false, а сам рэгдолл
- * построен под человеческий скелет). Поэтому тело просто скользит по направлению удара со
- * скоростью, которую ему придала машина ({@link AnimalImpact#animalDeltaV}), и тормозится
- * трением.
+ * Animals have no ragdoll in the game ({@code IsoAnimal.canRagdoll()} → false, and the ragdoll
+ * itself is built for a human skeleton). So the body simply slides in the direction of the hit
+ * at the speed the vehicle gave it ({@link AnimalImpact#animalDeltaV}) and is slowed down by
+ * friction.
  *
- * <h2>Как двигаем</h2>
- * Не координатами напрямую — на этом у нас уже пропадали зомби: персонаж, поставленный на
- * клетку без пола, игра молча удаляет. Двигаем штатным путём: {@code IsoMovingObject}
- * в {@code postupdate()} прибавляет {@code impulsex/impulsey} к следующей позиции и режет
- * шаг до одной клетки за кадр. Мы только дописываем туда своё смещение из
- * {@code IsoAnimal.update()} — он идёт раньше postupdate того же кадра.
+ * <h2>How we move it</h2>
+ * Not by setting coordinates directly: we have already lost zombies that way, as the game
+ * silently removes a character placed on a square without a floor. We move it the standard way:
+ * {@code IsoMovingObject} in {@code postupdate()} adds {@code impulsex/impulsey} to the next
+ * position and clamps the step to one square per frame. We only add our own offset there from
+ * {@code IsoAnimal.update()}, which runs before postupdate in the same frame.
  *
- * Стены проверяем сами, перед каждым шагом на соседнюю клетку ({@link #blockedAhead}):
- * лежащее животное игра делает несталкиваемым, и движок стены для него не разбирает.
- * Упёрлось — полёт окончен.
+ * We check walls ourselves, before every step onto a neighbouring square ({@link #blockedAhead}):
+ * the game makes a lying animal non-collidable, and the engine does not check walls for it.
+ * Once it runs into something, the flight is over.
  *
- * <h2>Где</h2>
- * Там, где животное считают: в одиночной игре — у себя, в сети — на сервере. Клиенты видят
- * полёт обычной синхронизацией позиции животного. На клиенте в сети реестр пуст: бросок
- * регистрируют только {@link Patch_animalHit} (одиночная игра) и {@link Patch_animalHitServer}.
+ * <h2>Where</h2>
+ * Wherever the animal is simulated: locally in singleplayer, on the server in multiplayer. Clients
+ * see the flight via normal animal position sync. On a multiplayer client the registry is empty:
+ * only {@link Patch_animalHit} (singleplayer) and {@link Patch_animalHitServer} register throws.
  *
- * <h2>Убитое животное</h2>
- * Убитое сначала играет анимацию падения, потом в состоянии «лежит» каждый кадр зовёт
- * {@code die()}, и тот превращает его в труп — отдельный объект, который мы уже не двигаем.
- * Чтобы труп родился в конце полёта, а не посередине, пока тело летит, {@code die()}
- * пропускается ({@link Patch_deferCorpse}). В сети труп создаёт сервер, так что он сразу
- * окажется там, где тело остановилось, — без телепорта у клиентов.
+ * <h2>Killed animals</h2>
+ * A killed animal first plays its fall animation, then in the "lying" state calls
+ * {@code die()} every frame, which turns it into a corpse: a separate object we no longer move.
+ * For the corpse to appear at the end of the flight and not midway while the body is flying,
+ * {@code die()} is skipped ({@link Patch_deferCorpse}). In multiplayer the server creates the
+ * corpse, so it appears right where the body stopped, without a teleport on the clients.
  */
 public final class AnimalThrow {
 
-    /** Торможение скольжением, клеток/с². Клетка — метр, это около 0.7 g. */
+    /** Sliding deceleration, squares/s². A square is one metre, so this is about 0.7 g. */
     public static final float DECEL = 7.0f;
-    /** Слабее этого — не бросок, а толчок. */
+    /** Anything weaker is a nudge, not a throw. */
     public static final float MIN_START = 0.5f;
-    /** Ниже этого тело считается остановившимся. */
+    /** Below this the body counts as stopped. */
     public static final float STOP_SPEED = 0.2f;
-    /** Страховка: полёт и удержание смерти не дольше этого. */
+    /** Safety net: neither the flight nor the held death lasts longer than this. */
     public static final long MAX_NANOS = 3_000_000_000L;
-    /** Кадр длиннее этого считаем за столько: после паузы тело не должно прыгнуть. */
+    /** A longer frame counts as this long: the body must not jump after a pause. */
     public static final float MAX_DT = 0.1f;
 
     public static final class Flight {
@@ -59,7 +59,7 @@ public final class AnimalThrow {
     }
 
     public static final Map<Object, Flight> FLIGHTS = new WeakHashMap<Object, Flight>();
-    /** Кто-то летит. Пока нет — патч на update() не стоит ничего, кроме этой проверки. */
+    /** Something is flying. While nothing is, the update() patch costs nothing but this check. */
     public static volatile boolean anyFlying = false;
 
     public static volatile boolean broken = false;
@@ -87,8 +87,8 @@ public final class AnimalThrow {
     }
 
     /**
-     * Бросить животное. Направление — от машины к животному (по нему и идёт импульс удара),
-     * скорость — сколько придала машина.
+     * Throws the animal. Direction: from the vehicle to the animal (the hit impulse acts along it);
+     * speed: what the vehicle imparted.
      */
     public static void launch(Object animal, float dirX, float dirY, float speed) {
         if (broken || animal == null || !(speed >= MIN_START)) {
@@ -120,7 +120,7 @@ public final class AnimalThrow {
         }
     }
 
-    /** Шаг полёта. Зовётся из IsoAnimal.update() — до postupdate того же кадра. */
+    /** One flight step. Called from IsoAnimal.update(), before postupdate of the same frame. */
     public static void step(Object animal) {
         Flight f;
         synchronized (FLIGHTS) {
@@ -134,16 +134,16 @@ public final class AnimalThrow {
                 init(animal);
             }
             long now = System.nanoTime();
-            // Флаг столкновения движка (isCollidedThisFrame) тут не годится: он встаёт и от
-            // толчков других персонажей, а в первые кадры тело ещё касается машины — полёт
-            // обрывался бы сразу. Стены проверяет blockedAhead на каждом шаге.
+            // The engine's collision flag (isCollidedThisFrame) is no good here: it is also raised
+            // by pushes from other characters, and in the first frames the body still touches the
+            // vehicle, so the flight would end at once. blockedAhead checks walls on every step.
             float dt = (now - f.lastNanos) / 1.0e9f;
             f.lastNanos = now;
             if (dt > MAX_DT) {
                 dt = MAX_DT;
             }
-            // Движок всё равно режет шаг до одной клетки за кадр — считаем так же, иначе
-            // пройденное расстояние в логе врало бы на медленном тике сервера.
+            // The engine clamps the step to one square per frame anyway, so we count the same way;
+            // otherwise the distance travelled in the log would be wrong on a slow server tick.
             float move = Math.min(f.speed * dt, 1.0f);
             if (move > 0.0f) {
                 String blocked = blockedAhead(animal, f, move);
@@ -173,16 +173,16 @@ public final class AnimalThrow {
     }
 
     /**
-     * Не упрётся ли шаг в препятствие. Своя проверка, а не только движка: лежащее
-     * животное игра делает несталкиваемым ({@code AnimalOnGroundState.enter} →
-     * {@code setCollidable(false)}), и тогда {@code postupdate} стены не проверяет вовсе
-     * ({@code if (this.collidable) DoCollide(...)}). Мёртвое тело без этой проверки
-     * проскользило бы сквозь стену.
+     * Whether the step will run into an obstacle. Our own check, not just the engine's: the game
+     * makes a lying animal non-collidable ({@code AnimalOnGroundState.enter} →
+     * {@code setCollidable(false)}), and then {@code postupdate} does not check walls at all
+     * ({@code if (this.collidable) DoCollide(...)}). Without this check a dead body would
+     * slide straight through a wall.
      *
-     * Проверка та же, что у движка при столкновениях, — {@code IsoGridSquare.testCollideAdjacent}:
-     * стены, окна, двери, заборы, сплошные объекты вроде деревьев.
+     * The engine's own collision check, {@code IsoGridSquare.testCollideAdjacent}:
+     * walls, windows, doors, fences, solid objects such as trees.
      *
-     * @return причина остановки или null, если путь свободен
+     * @return the reason for stopping, or null if the way is clear
      */
     public static String blockedAhead(Object animal, Flight f, float move) throws Exception {
         float x = ((Float) mGetX.invoke(animal)).floatValue();
@@ -192,7 +192,7 @@ public final class AnimalThrow {
         int ox = (int) Math.floor(x + f.dirX * move) - fx;
         int oy = (int) Math.floor(y + f.dirY * move) - fy;
         if (ox == 0 && oy == 0) {
-            return null;                    // в пределах своей клетки
+            return null;                    // within its own square
         }
         Object sq = mCurrentSquare.invoke(animal);
         if (sq == null) {
@@ -231,8 +231,8 @@ public final class AnimalThrow {
     }
 
     /**
-     * Для die(): не превращать в труп, пока тело летит. Полёт кончится — die() пройдёт
-     * на следующем кадре, игра зовёт его каждый кадр, пока мёртвое животное лежит.
+     * For die(): do not make a corpse while the body is flying. Once the flight ends, die() goes
+     * through on the next frame: the game calls it every frame while the dead animal is down.
      */
     public static boolean holdsDeath(Object chr) {
         if (broken || chr == null) {

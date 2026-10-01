@@ -5,33 +5,33 @@ import java.lang.reflect.Field;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Наезд на животное в мультиплеере: урон решает сервер, и тут та же модель, что в
- * одиночной игре ({@link Patch_animalHit}, {@link AnimalImpact}).
+ * Vehicle hitting an animal in multiplayer: the server decides the damage, with the same model
+ * as in singleplayer ({@link Patch_animalHit}, {@link AnimalImpact}).
  *
- * В сети животных считает сервер: у клиента в {@code IsoAnimal.updateInternal} поведения
- * нет, только отрисовка и отправка удара, а {@code isLocalPlayer()} у животного на
- * клиенте всегда false. Клиент водителя шлёт {@code VehicleHitAnimalPacket}, сервер его
- * разбирает:
+ * In multiplayer the server simulates animals: on the client {@code IsoAnimal.updateInternal}
+ * has no behaviour, only rendering and sending the hit, and an animal's {@code isLocalPlayer()}
+ * on the client is always false. The driver's client sends a {@code VehicleHitAnimalPacket}, and
+ * the server processes it:
  * <pre>
  * // VehicleHitField.process
- * if (target instanceof IsoAnimal isoAnimal) isoAnimal.setHealth(0.0F);   // любой наезд — смерть
+ * if (target instanceof IsoAnimal isoAnimal) isoAnimal.setHealth(0.0F);   // any hit is death
  * </pre>
  *
- * <h2>Скорость удара</h2>
- * Физики машин на сервере нет, скорость берётся из пакета. Клиент кладёт туда
- * {@code HitVars.hitSpeed}, а для стоящего животного это {@code max(2 * v, 5)}, где v —
- * полная горизонтальная скорость машины, без потолка. Выше 2.5 м/с v восстанавливается
- * точно. Ниже помогает направление удара: {@code IsoAnimal.Hit} на клиенте задаёт ему длину
- * {@code 3 * min(v, 15) / 15 = 0.2 * v}, и пакет его несёт.
+ * <h2>Impact speed</h2>
+ * The server has no vehicle physics, so the speed comes from the packet. The client puts
+ * {@code HitVars.hitSpeed} there, and for a standing animal that is {@code max(2 * v, 5)}, where
+ * v is the vehicle's full horizontal speed, uncapped. Above 2.5 m/s v is recovered exactly.
+ * Below that the hit direction helps: {@code IsoAnimal.Hit} on the client sets its length to
+ * {@code 3 * min(v, 15) / 15 = 0.2 * v}, and the packet carries it.
  *
- * Отличие от одиночной игры: здесь v — полная скорость машины, а не её доля в сторону
- * животного, направления движения в пакете нет. При касании вскользь урон выйдет больше.
+ * Difference from singleplayer: here v is the vehicle's full speed, not its component towards
+ * the animal; the packet has no direction of travel. A glancing touch deals more damage.
  *
- * Тот же вход — удар машиной на сервере — нужен и зомби: до урона водитель становится
- * хозяином зомби, а его труп ждёт точку приземления ({@link CorpseSync}).
+ * Zombies need the same entry point, a vehicle hit on the server: before the damage the driver
+ * becomes the zombie's owner, and its corpse waits for the landing point ({@link CorpseSync}).
  *
- * ВАЖНО: тела enter()/exit() встраиваются ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the bodies of enter()/exit() into the game's method: public
+ * members only, no lambdas.
  */
 @Patch(className = "zombie.network.fields.hit.VehicleHitField", methodName = "process", warmUp = true)
 public class Patch_animalHitServer {
@@ -39,7 +39,7 @@ public class Patch_animalHitServer {
     @Patch.OnEnter
     public static void enter(@Patch.This Object field, @Patch.Argument(0) Object wielder,
                              @Patch.Argument(1) Object target, @Patch.Argument(2) Object vehicle) {
-        // Зомби: до урона отдать его водителю и отложить труп до приземления (CorpseSync).
+        // Zombie: hand it to the driver before damage, defer the corpse until landing (CorpseSync).
         CorpseSync.onServerVehicleHit(wielder, target, vehicle, field);
         Impl.enter(target);
     }
@@ -51,9 +51,9 @@ public class Patch_animalHitServer {
     }
 
     public static final class Impl {
-        /** Порог в hitSpeed = max(2v, 5): ниже него скорость в поле стоит на пределе. */
+        /** Floor of hitSpeed = max(2v, 5): below it the speed field is stuck at the floor. */
         public static final float HIT_SPEED_FLOOR = 5.0f;
-        /** Длина направления удара на единицу скорости: 3 / 15. */
+        /** Length of the hit direction per unit of speed: 3 / 15. */
         public static final float DIR_PER_SPEED = 0.2f;
 
         public static volatile boolean broken = false;

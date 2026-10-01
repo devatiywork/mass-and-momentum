@@ -1,6 +1,6 @@
 package pz.labragdoll;
 
-/** Метка сборки лаборатории: в jar для Мастерской build.sh её не кладёт. См. {@link Log}. */
+/** Lab build marker: build.sh leaves it out of the Workshop jar. See {@link Log}. */
 final class DevBuild {
 
     private DevBuild() {

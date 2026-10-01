@@ -1,444 +1,451 @@
-# `vehicle-physics.cfg` — справочник
+# `vehicle-physics.cfg` — reference
 
-Файл лежит рядом с сейвами: `Zomboid\vehicle-physics.cfg` (папка Zomboid в домашнем каталоге пользователя).
-Перечитывается **на ходу раз в две секунды**. В сети действует файл сервера, свой
-клиент не читает — см. «Мультиплеер».
+The file lives next to the saves: `Zomboid\vehicle-physics.cfg` in your user folder (on Windows `C:\Users\<you>\Zomboid\vehicle-physics.cfg`).
+It is re-read **on the fly, every two seconds**. In multiplayer the server's file applies and
+the client does not read its own; see "Multiplayer".
 
-**Обновлено:** 27.09.2026
-
----
-
-## Зачем файл, а не константы в коде
-
-Машин в игре 280 — ваниль плюс моды. Подбор правильных чисел это работа итерациями, и каждая итерация не должна стоить пересборки jar и перезапуска игры.
+**Updated:** 27.09.2026
 
 ---
 
-## Формат
+## Why a file and not constants in the code
+
+The game has 280 vehicles: vanilla plus mods. Finding the right numbers is iterative work, and no iteration should cost a jar rebuild and a game restart.
+
+---
+
+## Format
 
 ```
-<маска имени>: ключ=значение ключ=значение ... [флаги]
+<name mask>: key=value key=value ... [flags]
 ```
 
-Правила проверяются сверху вниз, срабатывает **первое подходящее**.
+Rules are checked from top to bottom; the **first matching rule** applies.
 
-Маска — имя скрипта машины, допускается `*` в любом месте. Имя приходит в двух видах (`97bushAmbulance` и `Base.97bushAmbulance`), мод сопоставляет оба, так что ведущая звёздочка не обязательна.
+The mask is the vehicle's script name, with `*` allowed anywhere. The name comes in two forms (`97bushAmbulance` and `Base.97bushAmbulance`) and the mod matches both, so a leading asterisk is not required.
 
 ---
 
-## Что применяется когда
+## What applies when
 
-Это главное, что надо понимать, иначе правки «не работают».
+This is the most important thing to understand; otherwise your edits "don't work".
 
-| применяется на лету | требует перезапуска |
+| applies on the fly | requires a restart |
 |---|---|
-| `mass` с флагом `live` | `mass` без `live` |
+| `mass` with the `live` flag | `mass` without `live` |
 | `power`, `powerMul`, `brakeMul` | `stiffness` |
 | `lowGear`, `lowGearTo` | `travel`, `rest` |
 | `tank` | `maxSpeed` |
 | `service` | |
 
-Причина: масса уходит в физику **каждый кадр** через `Bullet.setVehicleMass(getFudgedMass())`, а параметры подвески зашиваются **один раз** при регистрации скрипта в `Bullet.defineVehicleScript`. Повторная отправка действует только на машины, созданные после неё.
+The reason: mass is fed into the physics engine **every frame** via `Bullet.setVehicleMass(getFudgedMass())`, while the suspension parameters are baked in **once**, when the script is registered in `Bullet.defineVehicleScript`. Sending them again only affects vehicles created afterwards.
 
-В сети таблица сервера при каждом приходе переприменяется целиком, поэтому там `mass` без `live` и `maxSpeed` тоже доходят до машин сразу. Подвеска — нет, как и здесь.
+In multiplayer the server table is re-applied in full every time it arrives, so there `mass` without `live` and `maxSpeed` also reach the vehicles immediately. The suspension does not, just as here.
 
 ---
 
-## Ключи
+## Keys
 
-### `mass=<кг>`
+### `mass=<kg>`
 
-Масса в килограммах. В игре те же единицы: ванильная легковушка — 800.
+Mass in kilograms. The game uses the same units: a vanilla passenger car is 800.
 
-Меняет поле скрипта, а с флагом `live` ещё и подменяется каждый кадр в `getFudgedMass()`.
+It changes the script field, and with the `live` flag it is also substituted every frame in `getFudgedMass()`.
 
-**Важно:** при включённом `live` груз в багажнике к массе **не прибавляется** — возвращается ровно указанное число. Топливо массу не добавляет и в ванили (уровень топлива живёт в `itemCapacity`, а масса считается по `weight` — независимые поля).
+**Important:** with `live` on, cargo in the trunk is **not added** to the mass: exactly the specified number is returned. Fuel does not add mass in vanilla either (the fuel level lives in `itemCapacity`, while mass is calculated from `weight`; they are independent fields).
 
 ### `live`
 
-Подменять массу в физике каждый кадр. Нужен, чтобы менять массу без перезапуска.
+Substitutes the mass in the physics every frame. You need it to change mass without a restart.
 
-То же для всех машин разом — переключатель «Масса на лету» (`LabVehiclePhysics.LiveMass`,
-по умолчанию выключен) на странице песочницы «Физика транспорта». Флаг `live` у отдельных
-правил работает и при выключенном переключателе; при включённом он не нужен.
+For all vehicles at once, there is the "Live vehicle mass" switch (`LabVehiclePhysics.LiveMass`,
+off by default) on the "Vehicle Physics" sandbox page. The `live` flag on individual rules
+works even with the switch off; with the switch on, the flag is not needed.
 
-**Оговорка, на которую легко попасться:** если при загрузке скрипту уже прописали большую массу, простое удаление правила её не вернёт — до перезапуска она останется. Чтобы вернуть ваниль в текущей сессии, поставьте `mass=<ванильное> live`.
+**An easy trap to fall into:** if a large mass was already written to the script at load time, simply deleting the rule will not revert it; the mass stays until a restart. To get vanilla back in the current session, set `mass=<vanilla value> live`.
 
-### `stiffness=auto|<число>`
+### `stiffness=auto|<number>`
 
-Жёсткость подвески. `auto` — умножить на то же отношение, что и массу.
+Suspension stiffness. `auto` multiplies it by the same ratio as the mass.
 
-**Обычно не нужен.** Сила опоры в Bullet сама масштабируется с массой; после снятия ограничителя в `PZBullet64.dll` подкручивать жёсткость не требуется. Ключ остался как инструмент.
+**Usually not needed.** In Bullet, the suspension's support force scales with mass by itself; now that the limiter in `PZBullet64.dll` has been removed, there is no need to tweak stiffness. The key remains as a tool.
 
-### `travel=<см>`, `rest=<число>`
+### `travel=<cm>`, `rest=<number>`
 
-Ход подвески и длина пружины в покое. Ваниль: 10 см и 0.2 у всех.
+Suspension travel and spring rest length. Vanilla: 10 cm and 0.2 for every vehicle.
 
-Ход — это дальность, на которой луч колеса ищет землю. Занижение ломает подвеску даже на лёгкой машине (проверено: 1 см при ванильной массе даёт просадку 0.30).
+Travel is the distance over which the wheel's ray searches for the ground. Setting it too low breaks the suspension even on a light vehicle (tested: 1 cm at vanilla mass gives a sag of 0.30).
 
-### `power=<л.с.>`
+### `power=<hp>`
 
-Паспортная мощность двигателя. Мод сам переводит её в тягу:
-
-```
-нужная тяга = 48.2 × л.с.      множитель = нужная тяга / engineForce скрипта
-```
-
-Масса в формуле сокращается, поэтому считать удельную мощность вручную больше не
-нужно — достаточно паспорта. Появился 26.09.2026 вместе с Lua API: авторы модов
-присылают мощность в л.с., и тот же перевод открыт для конфига.
-
-Если задан и `power`, и `powerMul`, главнее `powerMul`: это ручная настройка.
-
-### `powerMul=auto|<число>`
-
-Множитель тяги. `auto` — отношение новой массы к ванильной, то есть разгон остаётся стоковым несмотря на настоящий вес.
-
-Как посчитать честное число — через удельную мощность относительно ванильной легковушки:
+Rated engine power. The mod converts it into engine force by itself:
 
 ```
-ванильная легковушка PZ:  тяга 4000 / масса 800 = 5.00
-седан 1993 года:          140 л.с. / 1350 кг
-Bushmaster:               300 л.с. / 11400 кг
-отношение:                0.254   → разгон в 3.9 раза хуже седана
-нужная тяга:              5.00 × 0.254 × 11400 = 14 464
-в скрипте мода 4850       → powerMul = 2.98
+required force = 48.2 × hp      multiplier = required force / script's engineForce
 ```
 
-### `brakeMul=auto|<число>`
+Mass cancels out of the formula, so you no longer need to work out the power-to-weight ratio
+by hand: the spec sheet is enough. Added on 26.09.2026 together with the Lua API: mod authors
+supply power in hp, and the same conversion is available in the config.
 
-То же для тормозов. Одиннадцать тонн ванильными колодками не остановить.
+If both `power` and `powerMul` are set, `powerMul` wins: it is the manual setting.
 
-У Bushmaster ванильный баланс мода оказался уже грузовым (тормоз 62 / масса 998 = 0.062 против 0.113 у легковушки), поэтому достаточно `auto`.
+### `powerMul=auto|<number>`
 
-### `lowGear=<множитель>`, `lowGearTo=<км/ч>`
+Engine force multiplier. `auto` is the ratio of the new mass to the vanilla one, so acceleration stays stock despite the real weight.
 
-Множитель тяги на трогании. По умолчанию сход к 30 км/ч.
+To work out a realistic number, use the power-to-weight ratio relative to the vanilla passenger car:
 
-**Зачем это нужно.** В игре тяга линейна по оборотам и на холостых равна половине номинала:
+```
+PZ vanilla car:           force 4000 / mass 800 = 5.00
+1993 sedan:               140 hp / 1350 kg
+Bushmaster:               300 hp / 11400 kg
+ratio:                    0.254   → acceleration 3.9 times worse than the sedan
+required force:           5.00 × 0.254 × 11400 = 14,464
+mod's script has 4850     → powerMul = 2.98
+```
+
+### `brakeMul=auto|<number>`
+
+The same for brakes. Vanilla brake pads will not stop eleven tonnes.
+
+For the Bushmaster, the vehicle mod's own stock balance turned out to be truck-like already (brakes 62 / mass 998 = 0.062 versus 0.113 for a passenger car), so `auto` is enough.
+
+### `lowGear=<multiplier>`, `lowGearTo=<km/h>`
+
+Engine force multiplier for pulling away. By default it fades out by 30 km/h.
+
+**Why it is needed.** In the game, engine force is linear in RPM, and at idle it equals half the rated value:
 
 ```java
-engineForce = enginePower * (0.5 + обороты / 24000.0);
+engineForce = enginePower * (0.5 + rpm / 24000.0);
 ```
 
-Ни понижающей передачи, ни гидротрансформатора в модели нет. Лёгким машинам половины номинала хватает, тяжёлым — нет, и они не трогаются с места в толпе.
+The model has neither a low gear nor a torque converter. Half the rated value is enough for light vehicles but not for heavy ones, and they cannot pull away inside a crowd.
 
-Это **не поблажка, а восстановление недостающего куска модели**: у настоящего дизеля момент максимален внизу, а гидротрансформатор на трогании умножает его вдвое-втрое.
+This is **not a cheat but a missing piece of the model put back**: a real diesel delivers its peak torque at low revs, and a torque converter multiplies it two- to threefold when pulling away.
 
-Множитель максимален на месте и линейно сходит к единице — так ведёт себя гидротрансформатор от стопора до точки сцепления.
+The multiplier is at its maximum at standstill and falls linearly to one: this is how a torque converter behaves from stall to the coupling point.
 
-### `maxSpeed=<км/ч>`
+### `maxSpeed=<km/h>`
 
-Мягкий потолок скорости. Учтите **жёсткий глобальный потолок 34 единицы (~122 км/ч)** в `updateVelocityMultiplier` — он к массе отношения не имеет и ставить выше бессмысленно.
+Soft speed cap. Keep in mind the **hard global cap of 34 units (~122 km/h)** in `updateVelocityMultiplier`: it has nothing to do with mass, and setting a higher value is pointless.
 
-### `tank=<литры>`
+### `tank=<litres>`
 
-Объём топливного бака. У **всех** машин стоит ванильный автомобильный бак `BigGasTank1` с `MaxCapacity = 59`, даже у одиннадцатитонного броневика.
+Fuel tank capacity. **All** vehicles have the vanilla car tank `BigGasTank1` with `MaxCapacity = 59`, even the eleven-tonne armoured car.
 
-Подменяется возврат `getContainerCapacity()`, в сейв ничего не пишется. Ванильное уменьшение ёмкости по износу детали сохранено.
+The return value of `getContainerCapacity()` is substituted; nothing is written to the save. The vanilla capacity reduction from part wear is preserved.
 
-### `category=<категория>`
+### `category=<category>`
 
-Класс машины: `car`, `suv`, `pickup`, `van`, `delivery_van`, `truck`, `bus`, `light_military`,
-`wheeled_armour`, `military_truck`, `tracked_armour`, `trailer`. На физику пока не
-влияет. Нужен справочнику и калибровке автооценки (`vehicle_audit.py --calibrate`):
-категория едет вместе с данными машины, а не угадывается по маске.
+Vehicle class: `car`, `suv`, `pickup`, `van`, `delivery_van`, `truck`, `bus`, `light_military`,
+`wheeled_armour`, `military_truck`, `tracked_armour`, `trailer`. It does not affect physics
+yet. It is needed by the built-in table and for calibrating the automatic mass estimate
+(`vehicle_audit.py --calibrate`): the category travels with the vehicle's data instead of
+being guessed from the mask.
 
-### `preset=<имя>`
+### `preset=<name>`
 
-Готовый набор характеристик по типу техники — для машин, о которых мод ничего не
-знает: их нет в справочнике, и автор мода не прислал данных. Пресеты лежат в моде,
-`42/media/vehicle-physics-presets.cfg`, в формате справочника.
+A ready-made set of characteristics by vehicle type, for vehicles the mod knows nothing
+about: they are not in the built-in table, and their mod's author has not supplied any data.
+Presets live in the mod, in `42/media/vehicle-physics-presets.cfg`, in the built-in table's format.
 
 ```
-*SomeTank*: preset=tank                          # пресет целиком
-*SomeTank*: preset=tank mass=38000 power=600     # пресет с правкой
+*SomeTank*: preset=tank                          # whole preset
+*SomeTank*: preset=tank mass=38000 power=600     # preset with an override
 ```
 
-Заданное в строке главнее пресета, по тем же правилам, что и слияние слоёв: тяга
-(`power` / `powerMul`) и понижающая (`lowGear` / `lowGearTo`) — парами. Пресет
-раскрывается внутри своей строки, поэтому строка игрока с пресетом перекрывает
-справочник и данные автора по всем полям, которые задаёт пресет. Имя — без учёта
-регистра; неизвестное — одна строка в логе со списком известных, строка применяется
-без пресета. В аудите источник выглядит так: `cfg[*SomeTank*] over preset[tank]`.
+Values set in the line take precedence over the preset, by the same rules as layer merging:
+engine force (`power` / `powerMul`) and low gear (`lowGear` / `lowGearTo`) go in pairs. A preset
+is expanded inside its own line, so a player's line with a preset overrides the built-in table
+and the author data in every field the preset sets. The name is case-insensitive; an unknown
+name produces one log line listing the known ones, and the line is applied without a preset.
+In the audit, the source looks like this: `cfg[*SomeTank*] over preset[tank]`.
 
-| пресет | масса, кг | л.с. | км/ч | бак, л | понижающая |
+| preset | mass, kg | hp | km/h | fuel tank, L | low gear |
 |---|---:|---:|---:|---:|---|
-| `small_car` малолитражка | 1 000 | 75 | 110 | 45 | — |
-| `car` легковая | 1 400 | 140 | 115 | 60 | — |
-| `sports_car` спортивная | 1 450 | 300 | 120 | 70 | — |
-| `suv` внедорожник | 2 000 | 170 | 110 | 80 | ×1.5 до 20 |
-| `pickup` пикап | 2 100 | 200 | 110 | 100 | ×1.5 до 20 |
-| `van` фургон | 2 500 | 200 | 100 | 95 | ×1.5 до 20 |
-| `light_truck` лёгкий грузовик | 3 600 | 190 | 90 | 120 | ×1.5 до 20 |
-| `truck` грузовик | 9 000 | 280 | 90 | 300 | ×2.5 до 25 |
-| `bus` автобус | 11 000 | 250 | 90 | 300 | ×2 до 25 |
-| `light_military` лёгкая военная | 2 400 | 150 | 110 | 95 | ×2 до 30 |
-| `military_truck` военный грузовик | 12 000 | 350 | 90 | 300 | ×2.5 до 25 |
-| `armored_car` броневик | 9 000 | 250 | 100 | 300 | ×2.5 до 30 |
-| `wheeled_apc` колёсный БТР | 14 000 | 300 | 100 | 300 | ×2.5 до 30 |
-| `tracked_apc` гусеничный БТР | 12 000 | 275 | 65 | 360 | ×2.5 до 15 |
-| `light_tank` лёгкий танк, БМП | 25 000 | 550 | 65 | 600 | ×2 до 15 |
-| `tank` танк | 45 000 | 750 | 50 | 1 000 | ×2 до 12 |
-| `trailer` прицеп | 400 | — | — | — | — |
-| `heavy_trailer` тяжёлый прицеп | 2 000 | — | — | — | — |
+| `small_car` small car | 1,000 | 75 | 110 | 45 | — |
+| `car` passenger car | 1,400 | 140 | 115 | 60 | — |
+| `sports_car` sports car | 1,450 | 300 | 120 | 70 | — |
+| `suv` SUV | 2,000 | 170 | 110 | 80 | ×1.5 up to 20 |
+| `pickup` pickup | 2,100 | 200 | 110 | 100 | ×1.5 up to 20 |
+| `van` van | 2,500 | 200 | 100 | 95 | ×1.5 up to 20 |
+| `light_truck` light truck | 3,600 | 190 | 90 | 120 | ×1.5 up to 20 |
+| `truck` truck | 9,000 | 280 | 90 | 300 | ×2.5 up to 25 |
+| `bus` bus | 11,000 | 250 | 90 | 300 | ×2 up to 25 |
+| `light_military` light military vehicle | 2,400 | 150 | 110 | 95 | ×2 up to 30 |
+| `military_truck` military truck | 12,000 | 350 | 90 | 300 | ×2.5 up to 25 |
+| `armored_car` armoured car | 9,000 | 250 | 100 | 300 | ×2.5 up to 30 |
+| `wheeled_apc` wheeled APC | 14,000 | 300 | 100 | 300 | ×2.5 up to 30 |
+| `tracked_apc` tracked APC | 12,000 | 275 | 65 | 360 | ×2.5 up to 15 |
+| `light_tank` light tank, IFV | 25,000 | 550 | 65 | 600 | ×2 up to 15 |
+| `tank` tank | 45,000 | 750 | 50 | 1,000 | ×2 up to 12 |
+| `trailer` trailer | 400 | — | — | — | — |
+| `heavy_trailer` heavy trailer | 2,000 | — | — | — | — |
 
-Тормоза у всех — `auto`, от массы. В сети строка с пресетом едет в таблице сервера,
-как любая другая; сами пресеты у всех одинаковые — они в моде.
+All presets have `auto` brakes, derived from mass. In multiplayer a line with a preset travels
+in the server table like any other; the presets themselves are the same for everyone, since they
+ship with the mod.
 
-### `service`  (только сервер)
+### `service`  (server only)
 
-Разовая починка: все детали в 100, бак под завязку, колёса накачаны.
+One-off repair: all parts to 100, fuel tank filled to the brim, tyres inflated.
 
-Срабатывает **при каждом перечитывании файла**, поэтому ключ надо убрать сразу после — иначе машина будет чиниться при любой следующей правке конфига.
+It fires **every time the file is re-read**, so remove the key right afterwards; otherwise the vehicle will be repaired on every subsequent config edit.
 
-Выполняется **только на сервере** и явно рассылает изменённые детали клиентам
-(`transmitPartModData`, `transmitPartItem`, `transmitPartCondition`). Заправка идёт
-с флагом `force`, иначе количество режется по ёмкости предмета-бака. Разбор всей
-цепочки — `modding-notes.md` §12.
+It runs **only on the server** and explicitly sends the changed parts to clients
+(`transmitPartModData`, `transmitPartItem`, `transmitPartCondition`). Refuelling uses the
+`force` flag; otherwise the amount is clipped to the capacity of the tank item. For a breakdown
+of the whole chain, see `modding-notes.md` §12.
 
 ---
 
-## Расход топлива
+## Fuel consumption
 
-Правится не конфигом, а Lua-файлом мода — заменой ванильной зависимости от массы.
+It is changed not through the config but by the mod's Lua file, which replaces the vanilla dependence on mass.
 
-Ваниль:
+Vanilla:
 
 ```lua
 massMultiplier = (math.abs(1000 - vehicle:getScript():getMass()) / 300) + 1
 ```
 
-Точка отсчёта ровно 1000 кг, и стоит модуль. Из-за этого **малолитражка на 650 кг жрёт на 41% больше развозного фургона на 1160**. В ванили это не вылезало только потому, что весь парк втиснут в 650..1160.
+The reference point is exactly 1000 kg, and the formula takes the absolute value. Because of this, **a 650 kg small car guzzles 41% more fuel than a 1160 kg delivery van**. In vanilla this went unnoticed only because the whole fleet is squeezed into 650..1160.
 
-Наша замена — `масса^0.55`, по реальным данным (Bushmaster 40 л/100 км против 10 у седана, то есть вчетверо при восьмикратной разнице масс):
+Our replacement is `mass^0.55`, based on real data (the Bushmaster uses 40 L/100 km versus 10 for a sedan, i.e. four times as much with an eightfold difference in mass):
 
-| масса | ваниль | наша | расход упал в |
+| mass | vanilla | ours | consumption divided by |
 |---:|---:|---:|---:|
-| 650 (малолитражка) | 2.17 | 0.79 | 2.7 |
-| 998 | 1.01 | 1.00 | не изменился |
-| 1350 (седан) | 2.17 | 1.18 | 1.8 |
-| 2300 (фургон) | 5.33 | 1.58 | 3.4 |
-| 11 400 | 35.67 | 3.81 | 9.4 |
-| 52 000 (танк) | 171.00 | 8.79 | 19.5 |
+| 650 (small car) | 2.17 | 0.79 | 2.7 |
+| 998 | 1.01 | 1.00 | unchanged |
+| 1350 (sedan) | 2.17 | 1.18 | 1.8 |
+| 2300 (van) | 5.33 | 1.58 | 3.4 |
+| 11,400 | 35.67 | 3.81 | 9.4 |
+| 52,000 (tank) | 171.00 | 8.79 | 19.5 |
 
-Саму функцию не переписываем — зовём оригинал с поправленным `elapsedMinutes`. Расход в ней линеен по времени, поэтому умножение времени на отношение множителей даёт ровно нужный итог, и правка переживёт изменения остальной части формулы.
+We do not rewrite the function itself; we call the original with an adjusted `elapsedMinutes`. Consumption in it is linear in time, so multiplying the time by the ratio of the multipliers gives exactly the desired result, and the change will survive changes to the rest of the formula.
 
 ---
 
-## Известные ограничения
+## Known limitations
 
-**Гусеничная техника застревает на телах.** Не связано с нашими правками: в движке нет
-гусениц, число колёс жёстко ограничено четырьмя, и моддеры изображают ленту мелкими
-катками (радиус 0.15 против 0.55 у колёсной техники). Такое колесо не переезжает тело,
-а его луч достаёт вниз всего на 0.35. Временно помогает `rest=0.5`. Подробности —
+**Tracked vehicles get stuck on bodies.** This is unrelated to our changes: the engine has no
+tracks, the number of wheels is hard-limited to four, and modders imitate the track with small
+road wheels (radius 0.15 versus 0.55 on wheeled vehicles). Such a wheel does not roll over a
+body, and its ray reaches only 0.35 down. `rest=0.5` helps as a stopgap. Details:
 `backlog.md` §3g.
 
-**Тягу нельзя вывести из массы.** Танк и грузовик по 50 тонн, а мощность разная. Ключ
-`power=` избавил от ручного счёта — достаточно паспортных л.с., — но сами л.с. кто-то
-должен знать: игрок, автор мода через Lua API или пресет по типу техники (`preset=`).
-См. `vehicle-data-design.md`.
+**Engine force cannot be derived from mass.** A tank and a truck may both weigh 50 tonnes, yet
+their power differs. The `power=` key did away with manual calculation (rated hp is enough), but
+someone still has to know the hp: the player, the mod author via the Lua API, or a vehicle-type
+preset (`preset=`). See `vehicle-data-design.md`.
 
 ---
 
-## Рабочий пример
+## Worked example
 
-Bushmaster PMV со всеми паспортными характеристиками:
+The Bushmaster PMV with its full real-world specs:
 
 ```
-# справочник мода (vehicle-physics-defaults.cfg)
+# the mod's built-in table (vehicle-physics-defaults.cfg)
 *97bush*: mass=11400 power=300 maxSpeed=100 tank=319 lowGear=3 lowGearTo=30 brakeMul=auto category=wheeled_armour
 
-# файл игрока — паспортные 300 л.с. показались вялыми
+# the player's file — the rated 300 hp felt sluggish
 *97bush*: powerMul=4 live
 ```
 
-| паспорт | в игре |
+| spec sheet | in game |
 |---|---|
-| снаряжённая масса 11 400 кг (полная 15 400) | `mass=11400` |
-| Caterpillar 3126E 7.2 л, 300 л.с. при 2200 об/мин | `power=300` (игрок поднял до `powerMul=4`) |
-| максимальная скорость 100 км/ч | `maxSpeed=100` |
-| бак 319 л, запас хода 800 км | `tank=319` |
-| тормоза под 11 тонн | `brakeMul=auto` |
+| curb weight 11,400 kg (gross 15,400) | `mass=11400` |
+| Caterpillar 3126E 7.2 L, 300 hp at 2200 rpm | `power=300` (the player raised it to `powerMul=4`) |
+| top speed 100 km/h | `maxSpeed=100` |
+| fuel tank 319 L, range 800 km | `tank=319` |
+| brakes for 11 tonnes | `brakeMul=auto` |
 
-Запас хода получается честный: 319 л при расходе 40 л/100 км — это 800 км, больше чем у легковушки (59 л при 10 л/100 км = 590 км), за счёт впятеро большего бака.
+The range comes out realistic: 319 L at 40 L/100 km is 800 km, more than a passenger car's (59 L at 10 L/100 km = 590 km), thanks to a fuel tank five times larger.
 
 ---
 
-## Слои: откуда берутся характеристики
+## Layers: where the characteristics come from
 
-С 26.09.2026 — из трёх мест, с 27.09.2026 — из четырёх; каждое следующее перекрывает
-предыдущее **по полю**:
+Since 26.09.2026 they come from three places, and since 27.09.2026 from four; each one overrides
+the previous one **field by field**:
 
-| слой | где лежит | кто пишет |
+| layer | where it lives | who writes it |
 |---|---|---|
-| 1. встроенный справочник | `LabVehiclePhysics/42/media/vehicle-physics-defaults.cfg` | мы, едет вместе с модом |
-| 2. данные автора техники | Lua-таблица `LabVehiclePhysicsData` в его моде | автор, см. `vehicle-api.md` |
-| 3. этот файл | `Zomboid/vehicle-physics.cfg` | игрок; в сети — файл сервера. Инструмент лаборатории |
-| 4. таблица машин в песочнице | опция песочницы мира, страница «Физика транспорта: машины» | игрок в интерфейсе, решает последним |
+| 1. built-in table | `LabVehiclePhysics/42/media/vehicle-physics-defaults.cfg` | us; it ships with the mod |
+| 2. vehicle author's data | the Lua table `LabVehiclePhysicsData` in their mod | the author, see `vehicle-api.md` |
+| 3. this file | `Zomboid/vehicle-physics.cfg` | the player; in multiplayer, the server's file. A lab tool |
+| 4. vehicle table in the sandbox | a sandbox option of the world, the "Vehicle Physics: vehicles" page | the player, in the UI; has the final say |
 
-Таблица песочницы — раздел «Настройки в песочнице» ниже.
+The sandbox table is covered in the "Sandbox settings" section below.
 
-Справочник — в том же формате, что этот файл, с масками. Там только паспорта:
-масса, мощность в л.с., максималка, бак, понижающая, категория. Этот файл теперь —
-**только решения игрока**: тюнинг и лабораторные флаги `live`, `service`.
+The built-in table uses the same format as this file, with masks. It holds only the specs:
+mass, power in hp, top speed, fuel tank, low gear, category. This file is now
+**only for the player's decisions**: tuning and the lab flags `live` and `service`.
 
-Зачем так. Пока паспорта лежали здесь, у человека, скачавшего мод, файла не было —
-у него была бы ванильная физика. И в мультиплеере тоже: физику машины считает клиент
-водителя (сервер машины в Bullet не регистрирует — `VehicleScript.Loaded()` зовёт
-`toBullet()` только при `!GameServer.server`), так что гость без файла ездил бы на
-ванили. Теперь база у всех, у кого стоит мод, одна и та же.
+Why it works this way. While the specs lived here, someone who downloaded the mod did not have
+this file, so they would have had vanilla physics. The same in multiplayer: vehicle physics is
+computed by the driver's client (the server does not register vehicles in Bullet:
+`VehicleScript.Loaded()` calls `toBullet()` only when `!GameServer.server`), so a guest without
+the file would have been driving on vanilla numbers. Now everyone who has the mod installed has
+the same baseline.
 
-Тяга (`power` / `powerMul`) и понижающая (`lowGear` / `lowGearTo`) перекрываются
-**парами**: задал тягу хоть как-то — обе величины берутся из верхнего слоя.
+Engine force (`power` / `powerMul`) and low gear (`lowGear` / `lowGearTo`) are overridden
+**in pairs**: if you set engine force in any form, both values come from the upper layer.
 
-Пример — M60A3. Паспорт есть в справочнике и приходит от мода-примера
-`LabVehicleAuthorExample`; в этом файле игрок оставил только своё:
+Example: the M60A3. Its specs are in the built-in table and also come from the example mod
+`LabVehicleAuthorExample`; in this file the player has kept only their own changes:
 
 ```
 *M60A3*: powerMul=4 live service
 ```
 
-Итог: масса 52 000, бак 659, максималка 48, понижающая 2 до 12 км/ч — снизу;
-тяга ×4 вместо паспортных ×6.46 — от игрока. Источник в аудите:
+Result: mass 52,000, fuel tank 659, top speed 48 and low gear 2 up to 12 km/h come from below;
+engine force ×4 instead of the rated ×6.46 comes from the player. The source in the audit:
 
 ```
 cfg[*M60A3*] over author:LabVehicleAuthorExample over builtin[*M60A3*]
 ```
 
-Проверить, что получилось после всех слоёв, без игры:
+To check the result of all the layers without running the game:
 
 ```
-py -3.14 tools\vehicle-audit\vehicle_audit.py            # весь парк, колонка «источник»
-py -3.14 tools\vehicle-audit\vehicle_audit.py --authors  # что прислали авторы модов
+py -3.14 tools\vehicle-audit\vehicle_audit.py            # whole fleet, "source" column
+py -3.14 tools\vehicle-audit\vehicle_audit.py --authors  # what mod authors have sent
 ```
 
-### Почему справочник — файл с масками, а не Lua-таблица
+### Why the built-in table is a file with masks, not a Lua table
 
-У авторов контракт — таблица по точным именам скриптов. Для справочника маски
-удобнее: у ванили 157 скриптов на 26 кузовов, и TIS добавляет новые раскраски в
-обновлениях. Маска `Van*` накроет новый фургон сама, точное имя — нет.
+For authors, the contract is a table keyed by exact script names. For the built-in table, masks
+are more convenient: vanilla has 157 scripts for 26 body types, and TIS adds new liveries in
+updates. The mask `Van*` will cover a new van by itself; an exact name will not.
 
-### Что дал переход на л.с.
+### What switching to hp achieved
 
-В справочнике тяга задана мощностью (`power=200`), а не множителем. Множитель
-считается для каждого скрипта от его собственной тяги, и это само исправило
-огрубления старых масок: у раскрасок одного кузова тяга в скрипте бывает разной.
-При переносе, 26.09.2026, у 14 скриптов тяга сдвинулась к паспорту — например,
-у шести служебных пикапов было 167 л.с. вместо 200, а у `StepVanMail` — 205 вместо 190.
-Масса и тормоза не сдвинулись ни у одной из 190 машин.
+In the built-in table, engine force is given as power (`power=200`), not as a multiplier. The
+multiplier is calculated for each script from its own engine force, and this by itself fixed the
+rough approximations of the old masks: liveries of the same body can have different engine force
+in their scripts. During the migration on 26.09.2026, engine force moved towards the spec for
+14 scripts; for example, six service pickups had 167 hp instead of 200, and `StepVanMail` had
+205 instead of 190. Mass and brakes did not shift for any of the 190 vehicles.
 
 ---
 
-## Настройки в песочнице
+## Sandbox settings
 
-С 27.09.2026 у мода есть своя страница в настройках песочницы — «Физика транспорта»
-(`42/media/sandbox-options.txt`, переводы EN и RU). Значения хранит игра: в одиночной — в
-сейве мира, в сети — сервер, он же раздаёт их при входе и рассылает правки посреди игры.
-Мод перечитывает их раз в секунду (`LabSettings`), в логе — строка `settings:` при каждой смене.
+Since 27.09.2026 the mod has its own page in the sandbox settings, "Vehicle Physics"
+(`42/media/sandbox-options.txt`, EN and RU translations). The game stores the values: in
+singleplayer, in the world save; in multiplayer, on the server, which also hands them out on join
+and sends out changes mid-game. The mod re-reads them once a second (`LabSettings`) and logs a
+`settings:` line on every change.
 
-| опция | по умолчанию | что будет, если выключить |
+| option | default | what happens if you turn it off |
 |---|---|---|
-| Ванильные машины | Значения мода | «Стандарт»: у ванильных машин не действует справочник (слой 1) — масса, мощность, максималка, бак как в игре |
-| Мощность двигателей, множитель | 1.0, от 0.5 до 3.0 | не выключается, а умножает тягу всех машин поверх их настроек, в том числе без правил; тормоза не трогает |
-| Физика наезда на зомби | вкл | масса зомби, удар без потолка, толчок от зомби, лежачие тела — как в игре |
-| Труп следует за рэгдоллом | вкл | труп на месте удара |
-| Наезд на животных по массе и скорости | вкл | торможение и урон как в игре |
-| Расход топлива по массе | вкл | расход как в игре: ванильная формула от исходной массы машины |
-| Кусты тормозят по массе машины | вкл | ванильный потолок скорости в кустах |
-| Тяжёлая техника валит деревья | вкл | дерево — сплошное препятствие |
+| Vanilla vehicles | Mod values | "Standard": the built-in table (layer 1) does not apply to vanilla vehicles; mass, power, top speed and fuel tank are as in the game |
+| Engine power multiplier | 1.0, from 0.5 to 3.0 | cannot be turned off; it multiplies the engine force of all vehicles on top of their settings, including vehicles without rules; brakes are not affected |
+| Realistic zombie impacts | on | zombie mass, uncapped impacts, the push from zombies and lying bodies: all as in the game |
+| Corpse follows the ragdoll | on | the corpse appears at the point of impact |
+| Animal hits by mass and speed | on | slowdown and damage as in the game |
+| Fuel consumption by mass | on | consumption as in the game: the vanilla formula applied to the vehicle's original mass |
+| Bushes slow vehicles by mass | on | the vanilla speed cap in bushes |
+| Heavy vehicles knock down trees | on | a tree is a solid obstacle |
 
-**«Ванильные машины: Стандарт»** убирает только справочник и только у ванильных машин.
-Данные авторов модов и этот файл действуют всегда — это явный выбор автора и игрока. Модовых
-машин переключатель не касается. Ванильная машина — та, чей скрипт впервые описан самой
-игрой: у скрипта первое тело из `pz-vanilla` (`getLoadedScriptBodies()`); мод, дописавший
-что-то к ванильной машине, её такой и оставляет.
+**"Vanilla vehicles: Standard"** removes only the built-in table, and only for vanilla vehicles.
+Mod authors' data and this file always apply: they are an explicit choice by the author and the
+player. The switch does not touch modded vehicles. A vanilla vehicle is one whose script was
+first defined by the game itself: the script's first body comes from `pz-vanilla`
+(`getLoadedScriptBodies()`); a mod that adds something to a vanilla vehicle leaves it vanilla.
 
-Переключение на ходу: скрипты возвращаются к числам игры (исходные значения полей мод
-запоминает до первой своей записи), машины в мире сразу получают новые массу и максималку,
-а подвеска — при следующей загрузке чанка. В логе:
+Switching on the fly: scripts return to the game's numbers (the mod remembers the original field
+values before its first write), vehicles in the world get the new mass and top speed immediately,
+and the suspension on the next chunk load. In the log:
 
 ```
 [LabVehiclePhysics] vanilla vehicles switched to standard - vehicle scripts re-applied: N (returned to game values: N), ...
 ```
 
-**Расход «как в игре»** — не отключение нашей поправки. Ванильная формула от настоящей
-массы дала бы танку расход в 171 раз больше легковушки; поэтому она считается от массы
-машины до справочника — ровно как было бы без мода.
+**Consumption "as in the game"** is not simply our correction switched off. The vanilla formula
+applied to the real mass would give a tank 171 times the consumption of a passenger car, so it is
+calculated from the vehicle's mass before the built-in table, exactly as it would be without the mod.
 
-**Где менять.** В новом мире — при создании, страница «Физика транспорта». В существующем
-сейве опции мода получают значения по умолчанию. Посреди игры: в сети — админ, «Панель
-администратора → Настройки песочницы»; в одиночной — только из отладочного меню
-(`PZ-Lab-Debug.bat`, пункт «Sandbox»). Таблицу машин в одиночной игре можно править и из
-меню паузы — см. ниже.
+**Where to change them.** In a new world, at creation, on the "Vehicle Physics" page. In an
+existing save, the mod's options get their default values. Mid-game: in multiplayer, the admin
+does it via "Admin Panel → Sandbox Options"; in singleplayer, only from the debug menu
+(`PZ-Lab-Debug.bat`, the "Sandbox" item). In singleplayer the vehicle table can also be edited
+from the pause menu; see below.
 
-### Таблица машин — страница «Физика транспорта: машины»
+### Vehicle table — the "Vehicle Physics: vehicles" page
 
-Вторая страница мода в песочнице: значения по каждой машине. Слева — все машины с поиском
-и флажком «только изменённые» (изменённые подсвечены жёлтым). Справа — выбранная машина:
-пресет по типу техники, поля «масса, мощность, максималка, бак, тяга на трогании, до какой
-скорости», кнопка «Сбросить». Рядом с каждым полем — что будет действовать и что было бы без
-таблицы; ниже — откуда собран итог: «эта таблица › пресет «Танк» › справочник». Пустое поле
-берёт значение из пресета или из слоёв ниже; в пустом поле серым подсказано, какое.
+The mod's second sandbox page: values for each vehicle. On the left, all vehicles, with search
+and an "Only changed" checkbox (changed ones are highlighted in yellow). On the right, the
+selected vehicle: a vehicle-type preset, the fields "mass, power, top speed, fuel tank, pull-away
+boost, boost fades by", and a "Reset" button. Next to each field: what will apply and what it
+would be without the table; below them, where the result comes from:
+"this table › preset "Tank" › built-in table". An empty field takes its value from the preset or
+from the layers below; a grey hint in the empty field shows which value.
 
-Значения считает Java тем же кодом, что и игру (`VehicleTable` через `LabVehiclePhysicsNet`),
-так что панель показывает ровно то, что получит машина.
+The values are calculated by the same Java code that runs the game (`VehicleTable` via
+`LabVehiclePhysicsNet`), so the panel shows exactly what the vehicle will get.
 
-**Хранение.** Одна строковая опция песочницы `LabVehiclePhysics.VehicleTable`: строки этого
-файла через «;», по одной на машину, которую меняли, слева — точное имя скрипта:
+**Storage.** A single string sandbox option, `LabVehiclePhysics.VehicleTable`: lines in this
+file's format separated by ";", one for each vehicle that was changed, with the exact script name
+on the left:
 
 ```
 97bushAmbulance: preset=tank mass=38000;M60A3: power=800
 ```
 
-Игра сама хранит её с миром, в сети держит на сервере и рассылает. Это **верхний слой**:
-поверх справочника, данных автора и этого файла. Смена применяется на ходу, в логе:
+The game itself stores it with the world, and in multiplayer keeps it on the server and sends it
+out. This is the **top layer**: above the built-in table, the author data and this file. A change
+applies on the fly; in the log:
 
 ```
 [LabVehiclePhysics] sandbox vehicle table: 2 vehicle(s) - 97bushAmbulance: preset=tank mass=38000;M60A3: power=800
 [LabVehiclePhysics] sandbox vehicle table changed - vehicle scripts re-applied: N, vehicles already in the world updated: N
 ```
 
-**Где открыть.** Во всех трёх экранах песочницы — создание мира, настройки сервера при
-хостинге, редактор админа посреди игры. Штатно такой страницы не бывает (опции песочницы —
-фиксированные поля), поэтому экран строит страницу как обычно, а мод подменяет её панель
-своей и регистрирует как поле опции: штатное сохранение зовёт у неё `getText`/`setText`.
-В одиночной игре — ещё пункт «Физика транспорта» в меню паузы: то же окно, «Применить»
-пишет таблицу в песочницу мира, в сейв она попадает при следующем сохранении
-(`GameWindow.save` пишет `map_sand.bin` каждый раз).
+**Where to open it.** In all three sandbox screens: world creation, the server settings when
+hosting, and the admin editor mid-game. The stock game has no such page (sandbox options are
+fixed fields), so the screen builds the page as usual, and the mod replaces its panel with its own
+and registers it as the option's field: the stock save code calls `getText`/`setText` on it.
+In singleplayer there is also a "Vehicle physics" item in the pause menu: the same window, where
+"Apply" writes the table into the world's sandbox options; it reaches the save file the next time
+the game saves (`GameWindow.save` writes `map_sand.bin` every time).
 
 ---
 
-## Мультиплеер: действует файл сервера
+## Multiplayer: the server's file applies
 
-С 27.09.2026. В сети этот файл читает **только сервер** и раздаёт его всем, кто
-подключился. Свой файл клиент в сети не читает совсем.
+Since 27.09.2026. In multiplayer **only the server** reads this file, and it hands the file out
+to everyone who connects. In multiplayer a client does not read its own file at all.
 
-| где играешь | чей файл действует |
+| where you play | whose file applies |
 |---|---|
-| одиночная игра | свой |
-| кооп, ты хост | твой: сервер кооп-хоста — отдельный процесс, но с той же папкой `Zomboid` |
-| кооп, зашёл к другому | хоста |
-| выделенный сервер | из папки `Zomboid` сервера, то есть админа |
+| singleplayer | your own |
+| co-op, you are the host | yours: the co-op host's server is a separate process, but with the same `Zomboid` folder |
+| co-op, you joined someone else | the host's |
+| dedicated server | the one in the server's `Zomboid` folder, i.e. the admin's |
 
-Нет файла на сервере — у всех действуют только справочник мода и данные авторов.
+If the server has no file, only the mod's built-in table and the author data apply for everyone.
 
-**Зачем.** Машину в сети считает клиент водителя. Пока каждый читал свой файл, одна и
-та же машина весила у разных игроков по-разному — смотря кто за рулём.
+**Why.** In multiplayer, a vehicle is simulated by the driver's client. While everyone read their
+own file, the same vehicle weighed differently for different players, depending on who was driving.
 
-**Как ходит.** Войдя в игру, клиент просит таблицу, сервер отвечает. Поправили файл на
-сервере во время игры — через игровую минуту сервер разошлёт его всем заново (при
-сутках в один час это 2,5 секунды). Уходят только строки правил, без комментариев.
-Справочник и данные авторов по сети не передаются: они лежат в модах, а список модов
-сервер и так навязывает.
+**How it travels.** On entering the game, the client asks for the table and the server replies.
+If the file on the server is edited during play, the server sends it to everyone again after one
+in-game minute (with a one-hour day, that is 2.5 seconds). Only the rule lines are sent, without
+comments. The built-in table and the author data are not sent over the network: they live in the
+mods, and the server enforces the mod list anyway.
 
-**Таблица приходит уже после загрузки мира** — команду серверу можно послать только из
-игры. До её прихода действуют справочник и данные авторов. По приходу скрипты
-переприменяются, а машины, которые уже стоят рядом, сразу получают новые массу и
-максималку. Без этого они жили бы со старыми числами до выгрузки чанка: машина копирует
-их из скрипта один раз, при создании (`BaseVehicle.createPhysics`).
+**The table arrives only after the world has loaded**, because a command can be sent to the
+server only from within the game. Until it arrives, the built-in table and the author data apply.
+When it arrives, the scripts are re-applied, and vehicles already standing nearby get the new mass
+and top speed immediately. Without that, they would keep the old numbers until their chunk
+unloads: a vehicle copies them from the script once, at creation (`BaseVehicle.createPhysics`).
 
-**Лог клиента:**
+**Client log:**
 
 ```
 [LabVehiclePhysics] multiplayer: the local vehicle-physics.cfg is not used on a server - waiting for the server's table, ...
@@ -449,28 +456,28 @@ py -3.14 tools\vehicle-audit\vehicle_audit.py --authors  # что прислал
 [LabVehiclePhysics] server table changed - vehicle scripts re-applied: 262, vehicles already in the world updated: 11
 ```
 
-В аудите источник верхнего слоя — `server[маска]` вместо `cfg[маска]`.
+In the audit, the top layer's source is `server[mask]` instead of `cfg[mask]`.
 
-Строки выше — из проверки 27.09.2026 на тестовом сервере (`PZ-Lab-Server.bat`): в его файле
-у Bushmaster `powerMul=2`, у клиента 4, и клиент получил 2. Номер версии считается с
-каждого запуска сервера заново: это счётчик перечитываний файла, а не версия содержимого.
+The lines above come from a test on 27.09.2026 on the test server (`PZ-Lab-Server.bat`): its file
+had `powerMul=2` for the Bushmaster, the client's had 4, and the client got 2. The version number
+starts over with every server launch: it counts re-reads of the file, it is not a content version.
 
-**Лог сервера** (у кооп-хоста это `coop-console.txt`):
+**Server log** (for a co-op host it is `coop-console.txt`):
 
 ```
-[LabVehiclePhysics] server table: 15 rule line(s), version 1, sent to <игрок>
+[LabVehiclePhysics] server table: 15 rule line(s), version 1, sent to <player>
 [LabVehiclePhysics] server table: vehicle-physics.cfg changed - 15 rule line(s), version 2, sent to all players
 ```
 
-**Ограничение.** Правило, удалённое из файла во время игры, до машин не откатывается —
-нужен перезаход. Мод переписывает скрипт по правилу, а у машины без правила скрипт не
-трогает, и в нём остаются прежние числа. Добавленное и изменённое доходит сразу.
+**Limitation.** A rule deleted from the file during play is not rolled back on the vehicles; a
+rejoin is needed. The mod rewrites a script according to its rule, but does not touch the script
+of a vehicle without a rule, so the old numbers remain in it. Added and changed rules arrive at once.
 
-Устройство — `ServerTable.java`, почта — `LabVehiclePhysics_ServerTable.lua` в
-`client/` и `server/`.
+Implementation: `ServerTable.java`; messaging: `LabVehiclePhysics_ServerTable.lua` in
+`client/` and `server/`.
 
 ---
 
-## Предохранитель
+## Safety gate
 
-Все правки действуют, **только если мод числится в списке активных модов текущей игры**. В мультиплеере этот список приходит от сервера, поэтому на чужом сервере без мода всё молчит. Подробности — в `modding-notes.md`, раздел 6.
+All changes take effect **only if the mod is on the active mod list of the current game**. In multiplayer this list comes from the server, so on someone else's server without the mod, everything stays inactive. Details are in `modding-notes.md`, section 6.

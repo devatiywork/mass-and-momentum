@@ -7,66 +7,66 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Кусты и деревца: машина теряет энергию на каждом, а не упирается в потолок скорости.
+ * Bushes and saplings: the vehicle loses energy on each one instead of hitting a speed cap.
  *
- * <h2>Что было в ванили</h2>
- * Два механизма, и оба не знают массы машины.
+ * <h2>What vanilla does</h2>
+ * Two mechanisms, and neither knows the vehicle's mass.
  * <pre>
- * // 1. Потолок скорости. BaseVehicle.breakingObjects → updateVelocityMultiplier
- * slowFactor = max по объектам (33 - (10 - CarSlowFactor));      // максимум, не сумма
- * if (speed &gt; 34 - slowFactor) скорость режется до 34 - slowFactor;  // 11 - CarSlowFactor м/с
+ * // 1. Speed cap. BaseVehicle.breakingObjects → updateVelocityMultiplier
+ * slowFactor = max over objects (33 - (10 - CarSlowFactor));      // the maximum, not the sum
+ * if (speed &gt; 34 - slowFactor) speed is clamped to 34 - slowFactor;  // 11 - CarSlowFactor m/s
  *
- * // 2. Импульс каждый кадр контакта. BaseVehicle.checkCollisionWithPlant
- * applyImpulseFromHitPlant(obj, 0.1F);   // -скорость * 0.1 * масса: 3% скорости за кадр
+ * // 2. Impulse on every frame of contact. BaseVehicle.checkCollisionWithPlant
+ * applyImpulseFromHitPlant(obj, 0.1F);   // -velocity * 0.1 * mass: 3% of the speed per frame
  * </pre>
- * Потолок одинаков для легковушки и танка: куст на пути — и машина мгновенно, без торможения,
- * едет не быстрее 36 км/ч, а то и 4. Импульс масштабирован массой машины и на неё же делится —
- * масса снова сокращается; начисляется каждый кадр, так что на 60 FPS куст забирает
- * половину скорости, и тем больше, чем выше FPS. Разбор — {@code backlog.md} §3f.
+ * The cap is the same for a car and a tank: one bush in the way, and the vehicle instantly, with
+ * no braking, goes no faster than 36 km/h, or even 4. The impulse is scaled by the vehicle's mass
+ * and divided by the same mass, which cancels out again; it is applied every frame, so at
+ * 60 FPS a bush takes half the speed, more at higher FPS. Analysis: {@code backlog.md} §3f.
  *
- * <h2>Как теперь</h2>
- * Каждый объект при первом контакте забирает у машины фиксированную энергию E — на то, чтобы
- * его смять или сломать:
+ * <h2>How it works now</h2>
+ * On first contact each object takes a fixed energy E from the vehicle, the energy needed to
+ * crush or break it:
  * <pre>
  *   v' = sqrt(v^2 - 2 * E / M)
  * </pre>
- * Лёгкая машина в кустах заметно теряет скорость, тяжёлая — почти нет, танк не замечает.
- * Объекты складываются: живая изгородь из пяти кустов — это пять списаний. Потолка больше
- * нет, остаётся общий предел скорости игры. От FPS не зависит: одно списание на контакт.
+ * A light vehicle visibly slows in bushes, a heavy one barely does, a tank does not notice.
+ * Objects add up: a hedge of five bushes is five charges. There is no cap any more, only the
+ * game's general speed limit. It does not depend on FPS: one charge per contact.
  *
- * Энергии — игровые, подобраны под ощущение, а не измерены. Первые встречи пишутся в лог
- * со спрайтом и значением CarSlowFactor — по ним и калибровать.
+ * The energies are gameplay values, tuned by feel, not measured. The first encounters are logged
+ * with the sprite and the CarSlowFactor value; use them for calibration.
  *
- * Работает там, где считается машина: у клиента водителя и в одиночной игре. На сервере
- * ваниль импульсы машине не прикладывает.
+ * Runs wherever the vehicle is simulated: on the driver's client and in singleplayer. On the
+ * server vanilla applies no impulses to the vehicle.
  */
 public final class VegetationDrag {
 
-    /** Энергия на единицу CarSlowFactor, Дж. Легковушке на 40 км/ч один куст — около −3 км/ч. */
+    /** Energy per unit of CarSlowFactor, J. For a car at 40 km/h one bush is about −3 km/h. */
     public static final float E_PER_SLOW_FACTOR = 4000.0f;
-    /** Куст без CarSlowFactor. */
+    /** A bush without CarSlowFactor. */
     public static final float E_BUSH = 8000.0f;
     /**
-     * Молодое дерево (IsoTree размера 1): малолитражка на 30 км/ч выходит на 19. При 40 кДж
-     * она вставала намертво — для деревца перебор. Большие деревья — сплошное препятствие,
-     * это другой путь, их не трогаем.
+     * A young tree (IsoTree of size 1): a small car at 30 km/h drops to 19. At 40 kJ it
+     * stopped dead, which is too much for a sapling. Big trees are a solid obstacle, a
+     * different code path; we leave them alone.
      */
     public static final float E_SMALL_TREE = 20000.0f;
     /**
-     * Трава, наземные растения, листва ({@code IsoObject.isGrassLike()}). Почти даром: иначе
-     * поле высокой травы, если у неё есть CarSlowFactor, стало бы сотней списаний подряд.
+     * Grass, ground plants, foliage ({@code IsoObject.isGrassLike()}). Almost free: otherwise
+     * a field of tall grass, if it has a CarSlowFactor, would become a hundred charges in a row.
      */
     public static final float E_GRASS_LIKE = 500.0f;
-    /** Контакт прервался дольше этого — следующий будет новым: машина отъехала и въехала снова. */
+    /** Gap in contact after which the next one is new: the vehicle backed off and drove in again. */
     public static final long RESET_NANOS = 1_000_000_000L;
-    /** Импульс из очереди доходит за одно применение на 0.3 — см. AnimalImpact.APPLIED_FRACTION. */
+    /** 0.3 of a queued impulse gets through per application; see AnimalImpact.APPLIED_FRACTION. */
     public static final float APPLIED_FRACTION = AnimalImpact.APPLIED_FRACTION;
 
     public static volatile boolean broken = false;
-    /** Наш собственный вызов applyImpulseFromHitPlant — патч его пропускает. */
+    /** Our own call to applyImpulseFromHitPlant; the patch lets it through. */
     public static volatile boolean ownCall = false;
 
-    /** машина -> (объект -> время последнего касания, нс). Уже списанные объекты. */
+    /** vehicle -> (object -> time of the last touch, ns). Objects already charged. */
     public static final Map<Object, Map<Object, long[]>> CHARGED = new WeakHashMap<Object, Map<Object, long[]>>();
 
     public static Field fBreakingList;
@@ -97,7 +97,7 @@ public final class VegetationDrag {
     private VegetationDrag() {
     }
 
-    /** После BaseVehicle.breakingObjects(): снять потолок и списать новые объекты из списка. */
+    /** After BaseVehicle.breakingObjects(): removes the cap and charges new objects in the list. */
     public static void afterBreakingObjects(Object vehicle) {
         if (!LabGate.active() || broken || vehicle == null || !LabSettings.bushes()) {
             return;
@@ -132,9 +132,9 @@ public final class VegetationDrag {
     }
 
     /**
-     * Вместо ванильного applyImpulseFromHitPlant: списать объект один раз.
+     * Instead of the vanilla applyImpulseFromHitPlant: charges the object once.
      *
-     * @return true — пропустить ванильный импульс
+     * @return true to skip the vanilla impulse
      */
     public static boolean onPlantImpulse(Object vehicle, Object obj) {
         if (ownCall) {
@@ -145,8 +145,8 @@ public final class VegetationDrag {
         }
         try {
             init(vehicle);
-            // Большие деревья идут сюда же — в checkCollisionWithPlant у них общая ветка с
-            // кустами. Их не трогаем: без ванильного импульса машина проходила бы сквозь ствол.
+            // Big trees come here too: in checkCollisionWithPlant they share a branch with bushes.
+            // We leave them alone: without the vanilla impulse the vehicle would pass through the trunk.
             if (!(energyOf(obj) > 0.0f)) {
                 return false;
             }
@@ -160,8 +160,8 @@ public final class VegetationDrag {
     }
 
     /**
-     * Импульс из IsoObject.Collision для объекта с CarSlowFactor (одиночная игра и сервер) —
-     * пропустить: торможение о такие объекты считаем здесь.
+     * Whether to skip the IsoObject.Collision impulse for an object with CarSlowFactor
+     * (singleplayer and server): braking against such objects is computed here.
      */
     public static boolean skipsHitObjectImpulse(Object vehicle, Object obj) throws Exception {
         if (broken || vehicle == null || obj == null || !LabSettings.bushes()) {
@@ -175,7 +175,7 @@ public final class VegetationDrag {
         return props != null && ((Boolean) mPropsHas.invoke(props, "CarSlowFactor")).booleanValue();
     }
 
-    /** Первый контакт в эпизоде — списать энергию; повторные касания только продлевают эпизод. */
+    /** First contact in an episode charges the energy; repeat touches only extend the episode. */
     public static void charge(Object vehicle, Object obj, String via) throws Exception {
         long now = System.nanoTime();
         synchronized (CHARGED) {
@@ -212,7 +212,7 @@ public final class VegetationDrag {
         if (!(dv > 0.0f)) {
             return;
         }
-        // applyImpulseFromHitPlant кладёт в очередь -скорость * mul * масса, до машины доходит 0.3 от этого.
+        // applyImpulseFromHitPlant queues -velocity * mul * mass; 0.3 of that reaches the vehicle.
         float mul = dv / (APPLIED_FRACTION * v);
         ownCall = true;
         try {
@@ -230,7 +230,7 @@ public final class VegetationDrag {
         }
     }
 
-    /** Сколько энергии забирает объект, Дж. 0 — не тормозит. */
+    /** How much energy the object takes, J. 0 means it does not slow the vehicle. */
     public static float energyOf(Object obj) throws Exception {
         if (((Boolean) mIsGrassLike.invoke(obj)).booleanValue()) {
             return E_GRASS_LIKE;

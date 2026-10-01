@@ -3,15 +3,15 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Удар машины о препятствие, первая половина: если по ходу стоит дерево, которое этот удар
- * валит, — отменить {@code BaseVehicle.crash()} целиком ({@link TreeBreak#beforeCrash}).
+ * Vehicle hitting an obstacle, first half: if a tree in the way is felled by this impact,
+ * cancel {@code BaseVehicle.crash()} entirely ({@link TreeBreak#beforeCrash}).
  *
- * crash() бьёт машину по резкости остановки и не знает ни массы, ни того, что ствол сломался:
- * танк получал урон от ёлки. В сети он же шлёт серверу команду «vehicle/crash», и урон
- * наносит сервер, — пропуск crash() на клиенте водителя отменяет и его.
+ * crash() damages the vehicle by how abruptly it stops, knowing neither the mass nor that the
+ * trunk broke: a tank took damage from a spruce. In multiplayer it also sends "vehicle/crash"
+ * to the server, which deals the damage; skipping crash() on the driver's client cancels that too.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "crash", warmUp = true)
 public class Patch_treeCrashDamage {

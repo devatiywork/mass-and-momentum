@@ -10,46 +10,46 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * Данные о машинах от авторов модов — слой 1 из {@code Docs/vehicle-data-design.md}.
+ * Vehicle data from mod authors: layer 1 of {@code Docs/vehicle-data-design.md}.
  *
- * <h2>Контракт</h2>
- * Автор техники кладёт в свой мод Lua-файл:
+ * <h2>Contract</h2>
+ * A vehicle author puts a Lua file in their mod:
  * <pre>
  * LabVehiclePhysicsData = LabVehiclePhysicsData or {}
  * LabVehiclePhysicsData["M60A3"] = { mass = 52000, power = 750, maxSpeed = 48, tank = 659 }
  * </pre>
- * Без нашего мода эта таблица просто лежит в памяти и ничего не делает — второй версии
- * мода автору не нужно, зависимости от нас тоже.
+ * Without our mod this table just sits in memory and does nothing, so the author needs no second
+ * version of the mod, nor a dependency on us.
  *
- * <h2>Почему глобальная таблица, а не только функция</h2>
- * Вызов {@code LabVehiclePhysics.register(...)} сработает, только если наш Lua-файл
- * загрузился раньше авторского. Порядок загрузки Lua между модами автор не
- * контролирует: файл {@code AAA_tank.lua} выполнится раньше нашего, и
- * {@code if LabVehiclePhysics then} молча ничего не сделает. Таблица же создаётся тем,
- * кто пришёл первым ({@code X = X or {}}), и переживает любой порядок. Функция
- * {@code register} оставлена как удобная обёртка — она пишет в ту же таблицу.
+ * <h2>Why a global table and not just a function</h2>
+ * A call to {@code LabVehiclePhysics.register(...)} only works if our Lua file
+ * loaded before the author's. The author does not control the Lua load order between
+ * mods: a file named {@code AAA_tank.lua} runs before ours, and
+ * {@code if LabVehiclePhysics then} silently does nothing. The table, however, is created by
+ * whoever comes first ({@code X = X or {}}) and survives any order. The
+ * {@code register} function is kept as a convenience wrapper; it writes to the same table.
  *
- * <h2>Как читаем</h2>
- * Из Java, через {@code zombie.Lua.LuaManager.env} — ровно так сама игра читает
- * {@code SmashedCarDefinitions} в {@code BaseVehicle.setSmashed}. Всё рефлексией:
- * мод собирается без классов игры.
+ * <h2>How we read it</h2>
+ * From Java, via {@code zombie.Lua.LuaManager.env}, exactly the way the game itself reads
+ * {@code SmashedCarDefinitions} in {@code BaseVehicle.setSmashed}. Everything via reflection:
+ * the mod builds without the game's classes.
  *
- * Таблица перечитывается на той же двухсекундной частоте, что и файл конфига, потому
- * что Lua-файлы модов и скрипты машин грузятся каждый своим порядком. Снимок
- * копируется в Java целиком — ссылки на Lua-объекты не держим.
+ * The table is re-read at the same two-second interval as the config file, because mod
+ * Lua files and vehicle scripts each load in their own order. The snapshot is
+ * copied into Java whole; we hold no references to Lua objects.
  *
- * <h2>Проверка значений</h2>
- * Проверяем здесь, а не в Lua: здесь данные потребляются, и сюда же придут записи,
- * сделанные прямой записью в таблицу в обход {@code register}. Негодное поле
- * отбрасывается, остальные поля записи остаются; о каждой проблеме пишем в лог
- * один раз.
+ * <h2>Value validation</h2>
+ * We validate here, not in Lua: the data is consumed here, and entries written directly into
+ * the table, bypassing {@code register}, end up here too. An invalid field is dropped, the
+ * entry's other fields stay; each problem is logged
+ * once.
  */
 public final class LuaRegistry {
 
-    /** Имя глобальной таблицы — это публичный контракт, менять нельзя. */
+    /** Name of the global table. It is a public contract and must not change. */
     public static final String TABLE = "LabVehiclePhysicsData";
 
-    /** Известные категории. Незнакомую принимаем, но предупреждаем: вероятно опечатка. */
+    /** Known categories. An unknown one is accepted with a warning: probably a typo. */
     public static final Set<String> CATEGORIES = new HashSet<String>(java.util.Arrays.asList(
             "car", "suv", "pickup", "van", "delivery_van", "light_military",
             "wheeled_armour", "military_truck", "tracked_armour", "trailer"));
@@ -62,21 +62,21 @@ public final class LuaRegistry {
     public static Method mGetKey;
     public static Method mGetValue;
 
-    /** Текущий снимок: имя скрипта без модуля -> правило автора. Подменяется целиком. */
+    /** The current snapshot: script name without module -> author's rule. Replaced as a whole. */
     public static volatile Map<String, VehicleCfg.Rule> entries =
             Collections.<String, VehicleCfg.Rule>emptyMap();
-    /** Отпечаток содержимого: по нему понимаем, что таблица изменилась. */
+    /** Content fingerprint: tells us that the table has changed. */
     public static String signature = "";
-    /** О каких проблемах уже написали — чтобы не повторять каждые две секунды. */
+    /** Problems already reported, so they are not repeated every two seconds. */
     public static final Set<String> WARNED = new HashSet<String>();
 
     private LuaRegistry() {
     }
 
     /**
-     * Перечитать таблицу авторов.
+     * Re-read the authors' table.
      *
-     * @return true, если содержимое изменилось с прошлого раза
+     * @return true if the contents changed since the last time
      */
     public static boolean refresh() {
         if (broken) {
@@ -84,8 +84,8 @@ public final class LuaRegistry {
         }
         try {
             Object table = globalTable();
-            // TreeMap: порядок обхода Lua-таблицы не гарантирован, а отпечаток должен
-            // от него не зависеть, иначе мы бы "видели изменения" на пустом месте.
+            // TreeMap: Lua table iteration order is not guaranteed, and the fingerprint must
+            // not depend on it, otherwise we would "see changes" out of nowhere.
             TreeMap<String, VehicleCfg.Rule> fresh = new TreeMap<String, VehicleCfg.Rule>();
             TreeMap<String, String> prints = new TreeMap<String, String>();
             if (table != null) {
@@ -109,8 +109,8 @@ public final class LuaRegistry {
                     VehicleCfg.Rule rule = parseEntry(bare, value, print);
                     if (rule != null) {
                         if (fresh.containsKey(bare)) {
-                            // "Base.M60A3" и "M60A3" — одна машина. Какая запись победит,
-                            // зависит от порядка обхода таблицы, то есть от случая.
+                            // "Base.M60A3" and "M60A3" are the same vehicle. Which entry wins
+                            // depends on the table's iteration order, i.e. on chance.
                             warn(bare + ":dup", TABLE + " has two entries for the same vehicle '" + bare
                                     + "' (with and without the module prefix) - one of them wins at random, keep one key");
                         }
@@ -134,7 +134,7 @@ public final class LuaRegistry {
         }
     }
 
-    /** Глобальная таблица авторов или null, если её ещё нет (или Lua ещё не поднят). */
+    /** The authors' global table, or null if it does not exist yet (or Lua is not up yet). */
     public static Object globalTable() throws Exception {
         if (fEnv == null) {
             Class<?> lm = Class.forName("zombie.Lua.LuaManager");
@@ -166,17 +166,17 @@ public final class LuaRegistry {
         }
     }
 
-    /** Поля, которые принимаем от авторов. Всё остальное — предупреждение. */
+    /** Fields accepted from authors. Anything else gets a warning. */
     public static final Set<String> KNOWN = new HashSet<String>(java.util.Arrays.asList(
             "mass", "power", "maxSpeed", "tank", "lowGear", "lowGearTo", "category", "mod"));
 
     /**
-     * Разобрать одну запись. Негодные поля отбрасываются по одному, запись остаётся.
+     * Parse one entry. Invalid fields are dropped one by one; the entry stays.
      *
-     * Принимаем только паспортные величины. {@code powerMul}, {@code brakeMul} и прочие
-     * игровые множители автору не положены: он знает свою машину, но не обязан знать,
-     * что тяга в PZ отсчитывается от ванильной легковушки. Тормоза масштабируются от
-     * массы сами ({@code brakeMul=auto}), игрок может переопределить в конфиге.
+     * Only spec-sheet values are accepted. {@code powerMul}, {@code brakeMul} and other
+     * game multipliers are not for authors: an author knows their vehicle but need not know
+     * that engine force in PZ is relative to the vanilla passenger car. Brakes scale with
+     * mass on their own ({@code brakeMul=auto}); the player can override that in the config.
      */
     public static VehicleCfg.Rule parseEntry(String bare, Object entry, StringBuilder print) throws Exception {
         Object it = mIterator.invoke(entry);
@@ -223,19 +223,19 @@ public final class LuaRegistry {
         return new VehicleCfg.Rule(
                 bare,
                 mass,
-                null,                               // stiffness — ослабитель Bullet снят, не нужен
-                null,                               // engine — тягу задаёт power
+                null,                               // stiffness: Bullet limiter removed, unneeded
+                null,                               // engine: power sets the engine force
                 maxSpeed,
-                0.0f,                               // travel — геометрию подвески не трогаем
+                0.0f,                               // travel: suspension geometry left as is
                 0.0f,                               // rest
-                null,                               // powerMul — не принимаем от авторов
+                null,                               // powerMul: not accepted from authors
                 power,
-                mass > 0.0f ? "auto" : null,        // тормоза масштабируются вместе с массой
+                mass > 0.0f ? "auto" : null,        // brakes scale together with mass
                 lowGear,
                 lowGearTo,
-                false,                              // service — инструмент лаборатории
+                false,                              // service: a lab tool
                 tank,
-                false,                              // live — инструмент лаборатории
+                false,                              // live: a lab tool
                 category,
                 "author:" + (mod != null ? mod : "?"));
     }
@@ -298,7 +298,7 @@ public final class LuaRegistry {
         return isTable(o) ? "table" : o.getClass().getSimpleName();
     }
 
-    /** Сводка при каждом изменении: сколько машин и от каких модов. */
+    /** A summary on every change: how many vehicles and from which mods. */
     public static void report(TreeMap<String, VehicleCfg.Rule> fresh) {
         if (fresh.isEmpty()) {
             Log.debug("[LabVehiclePhysics] author data: " + TABLE + " is empty");

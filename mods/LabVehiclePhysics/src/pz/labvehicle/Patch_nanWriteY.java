@@ -3,10 +3,10 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Растяжка на NaN, точка 1: кто записал не-число в координату Y. Пара к {@link Patch_nanWriteX}.
+ * NaN tripwire, point 1: who wrote a NaN into coordinate Y. Twin of {@link Patch_nanWriteX}.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.iso.IsoMovingObject", methodName = "setY")
 public class Patch_nanWriteY {

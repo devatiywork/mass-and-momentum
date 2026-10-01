@@ -3,15 +3,15 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Растяжка на NaN, точка 2 для игрока: после каждого обновления запоминаем последнюю конечную
- * позицию, а стала NaN — возвращаем её ({@link NanGuard#player}). Иначе не-число уйдёт в
- * players.db, и при следующем входе игрок окажется в (0,0), за краем карты.
+ * NaN tripwire, point 2 for the player: after every update we remember the last finite
+ * position, and once it turns NaN we restore it ({@link NanGuard#player}). Otherwise the NaN goes
+ * into players.db, and on the next login the player ends up at (0,0), off the edge of the map.
  *
- * У IsoPlayer одно update() без аргументов; advice не трогает аргументы, так что и появись
- * перегрузка — патч по имени ей не повредит.
+ * IsoPlayer has a single update() with no arguments; the advice does not touch arguments, so
+ * even if an overload appears, the by-name patch will not harm it.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.characters.IsoPlayer", methodName = "update")
 public class Patch_nanPlayer {

@@ -3,24 +3,24 @@ package pz.labragdoll;
 import java.lang.reflect.Method;
 
 /**
- * Предохранитель: мод действует только там, где он разрешён.
+ * Safety gate: the mod takes effect only where it is allowed.
  *
- * Та же схема, что у LabVehiclePhysics (там же подробный разбор — {@code pz.labvehicle.LabGate}
- * и {@code Docs/modding-notes.md} §6, §11). Java-мод агент грузит при старте JVM, ещё до
- * того, как игра узнает, на какой сервер игрок зайдёт, и патчи оказываются в памяти всегда.
- * Без проверки рэгдоллы включались бы и на чужом сервере, где мода нет.
+ * The same scheme as in LabVehiclePhysics (detailed analysis there: {@code pz.labvehicle.LabGate}
+ * and {@code Docs/modding-notes.md} §6, §11). The agent loads a Java mod at JVM startup, before
+ * the game knows which server the player will join, so the patches are always in memory.
+ * Without the check, ragdolls would also be enabled on someone else's server without the mod.
  *
- * Спрашиваем {@code ZomboidFileSystem.instance.getModIDs()} — моды, реально загруженные в
- * этой сессии. На клиенте в сети этот список приходит от сервера. {@code ActiveMods} на
- * клиенте не заполняется вовсе — на этом LabVehiclePhysics однажды глушил сам себя.
+ * We ask {@code ZomboidFileSystem.instance.getModIDs()}: the mods actually loaded in
+ * this session. On a multiplayer client this list comes from the server. {@code ActiveMods} is
+ * not filled in on the client at all; that is how LabVehiclePhysics once muted itself.
  *
- * Рэгдолл боевого преимущества не даёт, это картинка, поэтому приоритет у предохранителя
- * был низкий. Но правило одно для всех наших модов: на чужом сервере — ваниль.
+ * A ragdoll gives no combat advantage, it is just visuals, so the safety gate had
+ * low priority. But the rule is the same for all our mods: on someone else's server, vanilla.
  */
 public final class LabGate {
 
     public static final String MOD_ID = "LabRagdollMP";
-    /** Как часто перепроверять. Список меняется между сессиями, а не в течение кадра. */
+    /** How often to recheck. The list changes between sessions, not within a frame. */
     public static final long RECHECK_NANOS = 2_000_000_000L;
 
     public static volatile boolean broken = false;
@@ -36,10 +36,10 @@ public final class LabGate {
     private LabGate() {
     }
 
-    /** @return true, если моду разрешено вмешиваться в игру. */
+    /** @return true if the mod is allowed to interfere with the game. */
     public static boolean active() {
         if (broken) {
-            return true;      // не смогли определить — ведём себя как раньше, но об этом сказано в логе
+            return true;      // could not tell: behave as before, but the log says so
         }
         long now = System.nanoTime();
         if (lastCheckNanos != 0L && now - lastCheckNanos < RECHECK_NANOS) {
@@ -73,7 +73,7 @@ public final class LabGate {
         }
     }
 
-    /** Моды, реально загруженные в этой сессии. На клиенте — пришедшие от сервера. */
+    /** Mods actually loaded in this session. On the client, the ones received from the server. */
     public static boolean isLoaded() {
         try {
             Object zfs = fInstance.get(null);

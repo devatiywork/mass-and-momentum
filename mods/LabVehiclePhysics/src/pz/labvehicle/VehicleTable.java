@@ -8,26 +8,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Таблица машин в песочнице — страница «Физика транспорта: машины».
+ * The vehicle table in the sandbox: the "Vehicle Physics: vehicles" page.
  *
- * <h2>Хранение</h2>
- * Одна строковая опция песочницы {@code LabVehiclePhysics.VehicleTable}: строки в формате
- * vehicle-physics.cfg через «;», по одной на машину, которую игрок менял.
+ * <h2>Storage</h2>
+ * A single string sandbox option {@code LabVehiclePhysics.VehicleTable}: lines in the
+ * vehicle-physics.cfg format separated by ";", one per vehicle the player has changed.
  * <pre>
  *   97bushAmbulance: preset=tank mass=38000;M60A3: power=800
  * </pre>
- * Слева — точное имя скрипта без модуля: так правило совпадает с именем в обоих видах, в каком
- * его отдаёт игра ({@code "97bushAmbulance"} и {@code "Base.97bushAmbulance"}). Игра сама хранит
- * опцию с миром, в сети держит её на сервере, раздаёт при входе и рассылает правки админа.
+ * Left side: the exact script name without the module, so the rule matches both forms the game
+ * uses ({@code "97bushAmbulance"} and {@code "Base.97bushAmbulance"}). The game itself keeps the
+ * option with the world, on the server in multiplayer, sending it on join and relaying admin edits.
  *
- * <h2>Место среди слоёв</h2>
- * Верхний слой: поверх справочника, данных автора мода и файла vehicle-physics.cfg
- * ({@link VehicleCfg#resolveLayers}). Файл остаётся инструментом лаборатории — live, service.
+ * <h2>Place among the layers</h2>
+ * The top layer: above the built-in table, the mod author's data and the vehicle-physics.cfg file
+ * ({@link VehicleCfg#resolveLayers}). The file remains a lab tool: live, service.
  *
- * <h2>Панель</h2>
- * Здесь же — данные для панели в Lua: список машин, пресеты, значения машины без строки
- * таблицы и с ней. Считает их тот же {@link VehicleCfg}, что и игру, — панель показывает ровно
- * то, что получит машина.
+ * <h2>Panel</h2>
+ * Also here: data for the Lua panel (the vehicle list, presets, a vehicle's values without its
+ * table row and with it). The same {@link VehicleCfg} that serves the game computes them, so the
+ * panel shows exactly what the vehicle will get.
  */
 public final class VehicleTable {
 
@@ -36,7 +36,7 @@ public final class VehicleTable {
     private VehicleTable() {
     }
 
-    /** Строка опции -> правила, по одному на машину. Пустая строка — пустой список. */
+    /** Option string -> rules, one per vehicle. An empty string gives an empty list. */
     public static List<VehicleCfg.Rule> parse(String table) {
         List<String> lines = new ArrayList<String>();
         if (table != null) {
@@ -51,16 +51,16 @@ public final class VehicleTable {
         return VehicleCfg.parseLines(lines, "sandbox", "sandbox vehicle table");
     }
 
-    /** Сколько машин в таблице — для строки settings: в логе. */
+    /** How many vehicles are in the table, for the settings: line in the log. */
     public static int count(String table) {
         return parse(table).size();
     }
 
-    // ================================================================ данные для панели
+    // ================================================================ data for the panel
 
     /**
-     * Все скрипты машин, по имени: {@code {name, full, mod, vanilla}} — массив Lua-таблиц.
-     * {@code mod} — id мода, который первым описал машину, у ванили {@code pz-vanilla}.
+     * All vehicle scripts by name: {@code {name, full, mod, vanilla}}, an array of Lua tables.
+     * {@code mod}: id of the mod that first defined the vehicle; {@code pz-vanilla} for vanilla.
      */
     public static Object vehicles() throws Exception {
         ServerTable.init();
@@ -105,7 +105,7 @@ public final class VehicleTable {
         return out;
     }
 
-    /** Пресеты в порядке файла: массив {@code {id, mass, power, maxSpeed, tank, lowGear, lowGearTo, category}}. */
+    /** Presets in file order: array of {@code {id, mass, power, maxSpeed, tank, lowGear, lowGearTo, category}}. */
     public static Object presets() throws Exception {
         ServerTable.init();
         VehicleCfg.reloadIfNeeded();
@@ -120,12 +120,12 @@ public final class VehicleTable {
     }
 
     /**
-     * Что получит машина: {@code {base, result, game}}.
+     * What the vehicle will get: {@code {base, result, game}}.
      * <ul>
-     *   <li>{@code base} — без строки таблицы: справочник, автор мода, файл;</li>
-     *   <li>{@code result} — со строкой {@code row} (то, что после двоеточия: {@code "preset=tank mass=38000"});
-     *       пустая — то же, что base;</li>
-     *   <li>{@code game} — числа самой игры: масса, максималка, мощность в л.с. по тяге скрипта.</li>
+     *   <li>{@code base} — without the table row: built-in table, mod author, file;</li>
+     *   <li>{@code result} — with {@code row} (the part after the colon: {@code "preset=tank mass=38000"});
+     *       an empty row gives the same as base;</li>
+     *   <li>{@code game} — the game's own numbers: mass, top speed, hp from the script's thrust.</li>
      * </ul>
      */
     public static Object describe(String name, String row) throws Exception {
@@ -146,7 +146,7 @@ public final class VehicleTable {
         return out;
     }
 
-    /** Поля правила для Lua; null-правило — пустая таблица с source = "". */
+    /** Rule fields for Lua; a null rule gives an empty table with source = "". */
     public static Object values(VehicleCfg.Rule r) throws Exception {
         Object t = newTable();
         if (r == null) {
@@ -169,7 +169,7 @@ public final class VehicleTable {
         return t;
     }
 
-    /** Числа самой игры: из запомненных до нашей записи полей скрипта, иначе — из скрипта как есть. */
+    /** The game's own numbers: from script fields saved before our write, else the script as is. */
     public static Object game(String name) throws Exception {
         Object t = newTable();
         float mass = 0.0f;
@@ -192,7 +192,7 @@ public final class VehicleTable {
         }
         num(t, "mass", mass);
         num(t, "maxSpeed", maxSpeed);
-        // Сколько л.с. соответствует тяге скрипта — обратный пересчёт ключа power.
+        // How many hp the script's thrust corresponds to: the power key converted back.
         num(t, "power", engineForce > 0.0f ? Math.round(engineForce / VehicleCfg.FORCE_PER_HP) : 0.0f);
         return t;
     }
@@ -205,7 +205,7 @@ public final class VehicleTable {
         ServerTable.mRawset.invoke(table, key, value);
     }
 
-    /** Число в таблицу, только если задано (больше нуля): в Lua пустое поле — nil. */
+    /** Puts a number into the table only if set (above zero): in Lua an empty field is nil. */
     public static void num(Object table, String key, float value) throws Exception {
         if (value > 0.0f) {
             ServerTable.mRawset.invoke(table, key, Double.valueOf(value));

@@ -1,26 +1,26 @@
 --[[
-  Таблица машин в песочнице — страница «Физика транспорта: машины».
+  Vehicle table in the sandbox options — the "Vehicle Physics: vehicles" page.
 
-  Штатные опции песочницы — фиксированные поля: флажок, число, список, строка. Таблицу по всем
-  машинам из них не собрать, поэтому данные лежат в одной строковой опции
-  (LabVehiclePhysics.VehicleTable: строки vehicle-physics.cfg через «;», по одной на машину,
-  которую игрок менял), а показываем их своей панелью вместо стандартного поля.
+  Stock sandbox options are fixed field types: checkbox, number, list, string. A table of all
+  vehicles cannot be built from them, so the data lives in a single string option
+  (LabVehiclePhysics.VehicleTable: vehicle-physics.cfg lines separated by ";", one per vehicle
+  the player changed), and our own panel shows it instead of the standard field.
 
-  Экранов песочницы три, и все строят страницы одинаково: список страниц слева, панель справа,
-  контролы опций — в таблице controls по имени опции. Поэтому после того, как экран построился,
-  находим свою страницу, подменяем её панель своей и кладём панель в controls под именем опции:
-  штатные settingsToUI / settingsFromUI зовут у неё setText / getText, как у обычного поля.
-    - SandboxOptionsScreen      — создание мира;
-    - ISServerSandboxOptionsUI  — редактор админа посреди игры (и «Sandbox» отладочного меню);
-    - ServerSettingsScreen      — настройки сервера при хостинге (Page3, контролы по категориям).
-  createPanel не перехватываем: у экрана хостинга класс страницы локальный, до него не дотянуться.
+  There are three sandbox screens, and all build pages the same way: page list on the left, panel
+  on the right, option controls in the controls table keyed by option name. So once a screen is
+  built, we find our page, replace its panel with ours and put our panel into controls under the
+  option name: the stock settingsToUI / settingsFromUI call its setText / getText like a plain field's.
+    - SandboxOptionsScreen      — world creation;
+    - ISServerSandboxOptionsUI  — the admin editor mid-game (and "Sandbox" in the debug menu);
+    - ServerSettingsScreen      — server settings when hosting (Page3, controls by category).
+  We do not hook createPanel: the hosting screen's page class is local and out of reach.
 
-  В одиночной игре песочницу после создания мира штатно не открыть — для неё пункт в меню паузы
-  открывает ту же панель в отдельном окне. Сохраняется с миром: GameWindow.save пишет опции
-  песочницы в map_sand.bin при каждом сохранении.
+  In singleplayer the sandbox options cannot be opened after world creation by stock means, so a
+  pause menu item opens the same panel in a separate window. The table is saved with the world:
+  GameWindow.save writes the sandbox options to map_sand.bin on every save.
 
-  Значения считает Java (VehicleTable через LabVehiclePhysicsNet) тем же кодом, что и игру, —
-  панель показывает ровно то, что получит машина.
+  Values are computed in Java (VehicleTable via LabVehiclePhysicsNet) by the same code the game
+  uses, so the panel shows exactly what the vehicle will get.
 ]]
 
 require "ISUI/ISPanel"
@@ -48,7 +48,7 @@ local ROW_H = ENTRY_H + 6
 local BTN_H = math.max(25, FONT_HGT + 8)
 local ENTRY_W = 90
 
--- Поля строки таблицы в порядке показа. integer — только цифры в поле ввода.
+-- Table row fields in display order. integer: digits only in the input field.
 local FIELDS = {
     { key = "mass",      label = "IGUI_LabVP_Mass",      integer = true },
     { key = "power",     label = "IGUI_LabVP_Power",     integer = true },
@@ -62,10 +62,10 @@ for _, f in ipairs(FIELDS) do
     KNOWN[f.key] = true
 end
 
--- ============================================================== модель таблицы
+-- ============================================================== table model
 
---- Строка опции -> { [имя скрипта] = { preset=, mass=, ..., extra={ прочие токены } } }.
---- Чужие токены (live, powerMul=… — если строку правили руками) не теряем, а носим в extra.
+--- Option string -> { [script name] = { preset=, mass=, ..., extra={ other tokens } } }.
+--- Unknown tokens (live, powerMul=…, if the string was edited by hand) are kept in extra, not lost.
 function LabVPTable.parse(str)
     local rows = {}
     for part in string.gmatch(str or "", "[^;]+") do
@@ -87,7 +87,7 @@ function LabVPTable.parse(str)
     return rows
 end
 
---- То, что после двоеточия: "preset=tank mass=38000". Пустая строка — машина не менялась.
+--- The part after the colon: "preset=tank mass=38000". An empty string means the vehicle is unchanged.
 function LabVPTable.rowTail(row)
     if not row then
         return ""
@@ -132,9 +132,9 @@ function LabVPTable.count(rows)
     return n
 end
 
--- ============================================================== вывод чисел и подписей
+-- ============================================================== number and label formatting
 
---- 45000 -> "45 000"; дробные — с одним знаком.
+--- 45000 -> "45 000"; fractions with one decimal place.
 function LabVPTable.number(v)
     if v == nil then
         return ""
@@ -155,7 +155,7 @@ function LabVPTable.number(v)
     return out
 end
 
---- Число для подсказки в пустом поле ввода — без пробелов, чтобы его можно было вписать как есть.
+--- Number for the placeholder of an empty input field: no spaces, so it can be typed in as is.
 function LabVPTable.plain(v)
     if v == nil then
         return ""
@@ -187,7 +187,7 @@ function LabVPTable.displayName(name)
     return text
 end
 
---- Что действует по полю: значение слоёв, а если его нет — число игры с пометкой.
+--- What applies to a field: the layers' value or, failing that, the game's number, marked as such.
 function LabVPTable.valueText(key, values, game)
     values = values or {}
     game = game or {}
@@ -204,7 +204,7 @@ function LabVPTable.valueText(key, values, game)
         if values.powerMul then
             return "×" .. tostring(values.powerMul)
         end
-        -- «~», а не «≈»: в шрифтах игры есть только ASCII, Latin-1, кириллица и знаки U+2000–U+2064
+        -- "~", not "≈": the game fonts only have ASCII, Latin-1, Cyrillic and characters U+2000–U+2064
         return game.power and ("~" .. LabVPTable.number(game.power) .. " " .. getText("IGUI_LabVP_hp") .. gameMark) or "—"
     elseif key == "maxSpeed" then
         if values.maxSpeed then
@@ -224,7 +224,7 @@ function LabVPTable.valueText(key, values, game)
     return ""
 end
 
---- Подпись источника из Java ("sandbox[X] over preset[tank] over builtin[*X*]") человеческими словами.
+--- The source label from Java ("sandbox[X] over preset[tank] over builtin[*X*]") in plain words.
 function LabVPTable.chainText(source)
     if not source or source == "" then
         return getText("IGUI_LabVP_Src_game")
@@ -242,15 +242,15 @@ function LabVPTable.chainText(source)
             table.insert(parts, token)
         end
     end
-    return table.concat(parts, " › ")      -- стрелки «→» в шрифтах игры нет
+    return table.concat(parts, " › ")      -- the game fonts have no "→" arrow
 end
 
---- Подстрока без спецсимволов шаблонов Lua: поиск по имени не должен падать на «(» или «-».
+--- Substring with Lua pattern special characters escaped: a name search must not break on "(" or "-".
 local function escapePattern(s)
     return (string.gsub(s, "[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0"))
 end
 
--- ============================================================== панель
+-- ============================================================== panel
 
 LabVPTablePanel = ISPanel:derive("LabVPTablePanel")
 
@@ -260,8 +260,8 @@ function LabVPTablePanel:new(x, y, width, height)
     self.__index = self
     o.backgroundColor = { r = 0, g = 0, b = 0, a = 0.3 }
     o.borderColor = { r = 0.4, g = 0.4, b = 0.4, a = 1 }
-    -- Поля, которые экраны песочницы ждут у панели страницы: поиск перебирает labels,
-    -- смена страницы — settingNames и titles.
+    -- Fields the sandbox screens expect on a page panel: search iterates over labels,
+    -- page switching uses settingNames and titles.
     o.labels = {}
     o.settingNames = {}
     o.controls = {}
@@ -292,9 +292,9 @@ function LabVPTablePanel:createChildren()
     self.search.target = self
     self:addChild(self.search)
 
-    -- Фильтры списка: 1 — только изменённые, 2 — только из модов. Второй включён сразу:
-    -- ванильных скриптов больше полутора сотен, а для них есть общий переключатель
-    -- «Ванильные машины» на первой странице.
+    -- List filters: 1 = only changed, 2 = only from mods. The second is on from the start:
+    -- there are over 150 vanilla scripts, and a single toggle covers them all,
+    -- "Vanilla vehicles", on the first page.
     self.filters = ISTickBox:new(PAD, PAD + ENTRY_H + 4, 200, ENTRY_H, "", self, LabVPTablePanel.onFilterChange)
     self.filters:initialise()
     self.filters:addOption(getText("IGUI_LabVP_OnlyChanged"))
@@ -346,7 +346,7 @@ function LabVPTablePanel:createChildren()
     self:showDetail(false)
 end
 
---- Список машин и пресетов — из Java, один раз.
+--- The vehicle and preset lists come from Java, once.
 function LabVPTablePanel:loadData()
     self.presetCombo:clear()
     self.presetCombo:addOptionWithData(getText("IGUI_LabVP_NoPreset"), nil)
@@ -420,7 +420,7 @@ function LabVPTablePanel:layout()
     self.hintY = self.resetButton:getY() + BTN_H + 10
 end
 
---- Правая часть видна, только когда выбрана машина.
+--- The right-hand side is visible only when a vehicle is selected.
 function LabVPTablePanel:showDetail(visible)
     self.presetCombo:setVisible(visible)
     self.resetButton:setVisible(visible)
@@ -482,7 +482,7 @@ function LabVPTablePanel:render()
     self:drawText(changed, x, self.hintY + FONT_HGT + 6, 0.6, 0.6, 0.6, 1, FONT)
 end
 
---- Строка списка: имя машины; изменённые в таблице — жёлтым.
+--- List row: the vehicle name; vehicles changed in the table are drawn in yellow.
 function LabVPTablePanel.drawVehicle(list, y, item, alt)
     if not item.height then
         item.height = list.itemheight
@@ -540,7 +540,7 @@ function LabVPTablePanel:onSelectVehicle(v)
     self:populate()
 end
 
---- Поля ввода и пресет — из строки таблицы выбранной машины.
+--- Input fields and preset are filled from the selected vehicle's table row.
 function LabVPTablePanel:populate()
     self.populating = true
     local row = self.rows[self.selected] or {}
@@ -555,7 +555,7 @@ function LabVPTablePanel:populate()
     self:refreshInfo()
 end
 
---- Пересчитать итог в Java и подсказки в пустых полях: что будет действовать, если поле не трогать.
+--- Recompute the result in Java and the empty-field placeholders: what applies if a field is left alone.
 function LabVPTablePanel:refreshInfo()
     self.info = nil
     if not self.selected or not self.java then
@@ -574,7 +574,7 @@ function LabVPTablePanel:refreshInfo()
     end
 end
 
---- Записать строку выбранной машины; пустая строка — машина убирается из таблицы.
+--- Store the selected vehicle's row; an empty row removes the vehicle from the table.
 function LabVPTablePanel:storeRow(row)
     if LabVPTable.rowTail(row) == "" then
         self.rows[self.selected] = nil
@@ -598,7 +598,7 @@ function LabVPTablePanel.onFieldChange(self, entry)
     elseif n and n > 0 then
         row[entry.labField] = text
     else
-        return      -- не число: пока пишут, ничего не меняем
+        return      -- not a number: still being typed, change nothing
     end
     self:storeRow(row)
 end
@@ -620,7 +620,7 @@ function LabVPTablePanel:onReset()
     self:populate()
 end
 
--- Как поле ввода для экрана песочницы: строка опции туда и обратно.
+-- Acting as an input field for the sandbox screen: the option string in and out.
 
 function LabVPTablePanel:setText(str)
     self.raw = str or ""
@@ -635,7 +635,7 @@ end
 
 function LabVPTablePanel:getText()
     if not self.java then
-        return self.raw      -- без Java не видно, что внутри, — отдаём как было
+        return self.raw      -- without Java we cannot see inside, so return it as it was
     end
     return LabVPTable.serialize(self.rows)
 end
@@ -647,7 +647,7 @@ function LabVPTablePanel:settingsToUI(options)
     end
 end
 
--- ============================================================== встраивание в экраны песочницы
+-- ============================================================== embedding into the sandbox screens
 
 local function ourItem(listbox)
     for _, entry in ipairs(listbox.items or {}) do
@@ -663,8 +663,8 @@ local function ourItem(listbox)
     return nil
 end
 
---- Подменить панель нашей страницы. Текущее значение берём у штатного поля, которое подменяем:
---- экран уже успел его заполнить.
+--- Replace our page's panel. The current value is taken from the stock field being replaced:
+--- the screen has already filled it in.
 function LabVPTable.replacePanel(screen, listbox, controls, x, y, w, h)
     if not listbox or not controls then
         return nil
@@ -737,7 +737,7 @@ if ServerSettingsScreen and ServerSettingsScreen.create then
     end
 end
 
--- ============================================================== одиночная игра: окно из меню паузы
+-- ============================================================== singleplayer: window from the pause menu
 
 LabVPTableWindow = ISCollapsableWindow:derive("LabVPTableWindow")
 
@@ -785,8 +785,8 @@ function LabVPTableWindow:createChildren()
     self:addChild(self.applyBtn)
 end
 
---- Записать таблицу в опции песочницы мира. Java подхватит её в течение секунды, а в сейв
---- она попадёт при следующем сохранении мира.
+--- Write the table to the world's sandbox options. Java picks it up within a second, and it
+--- reaches the save file with the next world save.
 function LabVPTableWindow:onApply()
     local options = getSandboxOptions()
     if options:getOptionByName(OPTION) then
@@ -818,7 +818,7 @@ function LabVPTable.openWindow()
     LabVPTableWindow.instance = window
 end
 
---- Пункт «Физика транспорта» в меню паузы одиночной игры — сразу под «Настройками».
+--- The "Vehicle physics" item in the singleplayer pause menu, right below "Options".
 function LabVPTable.addPauseMenuItem(screen)
     local options = screen.optionsOption
     if not options or not screen.bottomPanel then
@@ -832,7 +832,7 @@ function LabVPTable.addPauseMenuItem(screen)
         getSoundManager():playUISound("UIActivateMainMenuItem")
         LabVPTable.openWindow()
     end
-    -- подсветка при наведении — как у остальных пунктов
+    -- hover highlight, same as the other items
     item.fade = UITransition.new()
     item.fade:setFadeIn(false)
     item.prerender = MainScreen.prerenderBottomPanelLabel

@@ -6,40 +6,40 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Этап 1.7: физически осмысленная сила первого удара машины по персонажу.
+ * Stage 1.7: a physically meaningful force for the vehicle's first hit on a character.
  *
- * <p>Ваниль передаёт в {@code onHitByVehicle()} не настоящую скорость:</p>
+ * <p>Vanilla does not pass the real speed to {@code onHitByVehicle()}:</p>
  * <pre>
- * speed = min(|velocity|, 15);                         // всё выше ~54 км/ч потеряно
- * hitDir *= 3 * speed / 15;                            // длина не больше 3
- * hitForce = speed + clientForce / vehicleMass;        // масса в обратной зависимости
+ * speed = min(|velocity|, 15);                         // everything above ~54 km/h is lost
+ * hitDir *= 3 * speed / 15;                            // length no more than 3
+ * hitForce = speed + clientForce / vehicleMass;        // mass enters inversely
  * </pre>
  *
- * <p>Первая версия патча заменила это на {@code speed * vehicleMass / 800}, с потолком
- * {@code x4}. Это устранило обратную зависимость, но смешало две разные стороны
- * столкновения. После того как машина уже намного тяжелее тела, её дальнейшее утяжеление
- * почти не увеличивает импульс, полученный телом. Оно уменьшает потерю скорости самой
- * машины. Для фронтального удара правильный масштаб задаёт приведённая масса:</p>
+ * <p>The first version of the patch replaced this with {@code speed * vehicleMass / 800},
+ * capped at {@code x4}. That removed the inverse dependence but mixed up two different sides
+ * of the collision. Once the vehicle is already much heavier than the body, making it heavier
+ * still barely increases the momentum the body receives. What it reduces is the speed loss of
+ * the vehicle itself. For a head-on hit, the correct scale is set by the reduced mass:</p>
  * <pre>
  * reducedMass = vehicleMass * bodyMass / (vehicleMass + bodyMass)
  * factor      = reducedMass / reducedMass(800 kg, bodyMass)
  * </pre>
  *
- * <p>Для тела 100 кг коэффициенты получаются: легковушка 800 кг = 1.000,
- * Bushmaster 11 400 кг = 1.115, M60A3 52 000 кг = 1.123. Поэтому при одинаковой
- * скорости все три машины причиняют телу сопоставимый удар, а разница в прохождении
- * толпы возникает на стороне обратного импульса: одна и та же передача импульса гораздо
- * слабее замедляет тяжёлую машину.</p>
+ * <p>For a 100 kg body the factors come out as: passenger car 800 kg = 1.000,
+ * Bushmaster 11 400 kg = 1.115, M60A3 52 000 kg = 1.123. So at the same speed
+ * all three vehicles deal the body a comparable blow, and the difference in ploughing through
+ * a crowd arises on the reaction-impulse side: the same momentum transfer slows a heavy
+ * vehicle far less.</p>
  *
- * <p>Эффективную скорость для урона и стойки ограничиваем на 25. При этом значении
- * ваниль уже гарантирует падение даже устойчивого зомби, а урон многократно превышает
- * его здоровье. Дальнейший рост числа только разгонял бы квадратичную формулу урона,
- * не добавляя наблюдаемого результата. Направление толчка масштабируется отдельно по
- * реальной скорости и приведённой массе; повторного умножения скорости больше нет.</p>
+ * <p>The effective speed for damage and knockdown is capped at 25. At this value
+ * vanilla already guarantees that even a sturdy zombie goes down, and the damage exceeds its
+ * health many times over. Raising the number further would only inflate the quadratic damage
+ * formula without adding any observable result. The push direction is scaled separately by
+ * the real speed and the reduced mass; speed is no longer multiplied in twice.</p>
  *
- * <p>Обратный импульс машине здесь не меняется. Он рассчитывается в
- * {@code BaseVehicle.applyImpulseFromHitPedestrian()} от массы тела и скорости, а
- * {@link Patch_impulseBudget} не даёт списывать его повторно весь контакт.</p>
+ * <p>The reaction impulse on the vehicle is not changed here. It is computed in
+ * {@code BaseVehicle.applyImpulseFromHitPedestrian()} from the body mass and speed, and
+ * {@link Patch_impulseBudget} keeps it from being deducted repeatedly throughout the contact.</p>
  */
 @Patch(className = "zombie.characters.IsoGameCharacter", methodName = "onHitByVehicle", warmUp = true)
 public class Patch_onHitByVehicle {
@@ -53,19 +53,19 @@ public class Patch_onHitByVehicle {
     }
 
     public static final class Impl {
-        /** Машина, под которую откалибрована ванильная реакция тела. */
+        /** The vehicle mass the vanilla body reaction is calibrated for. */
         public static final float REFERENCE_VEHICLE_MASS = 800.0f;
-        /** Базовая масса персонажа в формуле PZ; разброс добавляет Patch_getMass. */
+        /** Base character mass in the PZ formula; Patch_getMass adds the spread. */
         public static final float BASE_BODY_MASS = 100.0f;
-        /** Численные страховки для экзотически лёгких и ошибочно тяжёлых скриптов. */
+        /** Numeric safeguards for exotically light and erroneously heavy scripts. */
         public static final float FACTOR_MIN = 0.5f;
         public static final float FACTOR_MAX = 1.25f;
-        /** Старый потолок скорости и новый предел чтения реальной скорости. */
+        /** The old speed cap and the new limit for reading the real speed. */
         public static final float VANILLA_SPEED_CAP = 15.0f;
         public static final float REAL_SPEED_MAX = 40.0f;
-        /** Насыщение игровой формулы урона/падения. */
+        /** Saturation point of the game's damage/knockdown formula. */
         public static final float EFFECTIVE_IMPACT_MAX = 25.0f;
-        /** Защита от аномального вектора толчка. Ванильный максимум равен 3. */
+        /** Guard against an abnormal push vector. The vanilla maximum is 3. */
         public static final float HIT_DIR_MAX = 10.0f;
 
         public static volatile boolean broken = false;
@@ -77,13 +77,13 @@ public class Patch_onHitByVehicle {
         public static long hits = 0L;
         public static int logged = 0;
 
-        /** @return новое значение hitForce. Побочно исправляет длину вектора толчка. */
+        /** @return the new hitForce value. Side effect: fixes the length of the push vector. */
         public static float rewrite(Object character, Object vehicle, float vanillaForce, Object hitDir) {
             if (!LabGate.active()) {
                 return vanillaForce;
             }
-            // Сеть: наш водитель сбил зомби — когда тело ляжет, серверу уйдёт точка (CorpseSync).
-            // У этого свой выключатель — «Труп следует за рэгдоллом», а не физика наезда.
+            // Multiplayer: our driver hit a zombie; when the body lands, the server gets its point
+            // (CorpseSync). Its own switch is "Corpse follows the ragdoll", not the impact physics.
             CorpseSync.onLocalHit(character, vehicle);
             if (!LabSettings.zombieImpact()) {
                 return vanillaForce;
@@ -128,7 +128,7 @@ public class Patch_onHitByVehicle {
             }
         }
 
-        /** Масса тела без покадрового множителя: тот же разброс, что у обратного импульса. */
+        /** Body mass without the per-frame multiplier: same spread as in the reaction impulse. */
         public static float bodyMassFor(Object character) {
             float spread = character == null ? 1.0f : Patch_getMass.Impl.spreadFor(character);
             return BASE_BODY_MASS * spread;
@@ -141,7 +141,7 @@ public class Patch_onHitByVehicle {
             return firstMass * secondMass / (firstMass + secondMass);
         }
 
-        /** Чистая функция вынесена отдельно, чтобы формулу можно было проверить без игры. */
+        /** A pure function, kept separate so the formula can be checked without the game. */
         public static float reducedMassFactor(float vehicleMass, float bodyMass) {
             float actual = reducedMass(vehicleMass, bodyMass);
             float reference = reducedMass(REFERENCE_VEHICLE_MASS, bodyMass);
@@ -156,8 +156,8 @@ public class Patch_onHitByVehicle {
         }
 
         /**
-         * BaseVehicle передал уже масштабированный вектор длиной min(speed,15)/5.
-         * Нормализуем его и задаём длину заново: speed/5 * reducedMassFactor.
+         * BaseVehicle passes an already scaled vector of length min(speed,15)/5.
+         * We normalise it and set the length anew: speed/5 * reducedMassFactor.
          */
         public static float rewriteDirection(Object hitDir, float speed, float factor) throws Exception {
             if (hitDir == null || dirX == null) {
@@ -179,7 +179,7 @@ public class Patch_onHitByVehicle {
             return target;
         }
 
-        /** Горизонтальная скорость машины из физики, без ванильного потолка. */
+        /** Horizontal vehicle speed from the physics, without the vanilla cap. */
         public static float speedOf(Object vehicle) throws Exception {
             Object out = velOut;
             vGetLinearVelocity.invoke(vehicle, out);

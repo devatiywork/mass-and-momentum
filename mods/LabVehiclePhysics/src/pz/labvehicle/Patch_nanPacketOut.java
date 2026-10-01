@@ -3,14 +3,14 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Растяжка на NaN, точка 3: клиент собрал пакет физики машины ({@code VehiclePhysicsPacket.set}).
- * Если в нём не-число — пишем, что именно, и заменяем последним нормальным состоянием машины
- * ({@link NanGuard#packetOut}): сервер применяет пакет без проверок, и NaN из него уходит в сейв.
+ * NaN tripwire, point 3: the client built a vehicle physics packet ({@code VehiclePhysicsPacket.set}).
+ * If it holds a NaN, we log what exactly and replace it with the vehicle's last good state
+ * ({@link NanGuard#packetOut}): the server applies it unchecked, and the NaN reaches the save.
  *
- * Класс пакета грузится поздно — он в {@link Main#PRELOAD}.
+ * The packet class loads late, so it is listed in {@link Main#PRELOAD}.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.network.packets.vehicle.VehiclePhysicsPacket", methodName = "set", warmUp = true)
 public class Patch_nanPacketOut {

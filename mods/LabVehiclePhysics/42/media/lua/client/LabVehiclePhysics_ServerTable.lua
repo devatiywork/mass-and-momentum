@@ -1,17 +1,17 @@
 --[[
-  Серверная таблица машин — сторона клиента.
+  Server vehicle table — the client side.
 
-  В сети физику машин задаёт файл сервера: у кооп-хоста это файл хоста, у выделенного
-  сервера — файл админа. Свой vehicle-physics.cfg клиент в сети не читает вообще, иначе
-  одна машина весила бы у разных игроков по-разному: считает её клиент водителя.
+  In multiplayer, vehicle physics comes from the server's file: the host's file on a co-op host,
+  the admin's file on a dedicated server. The client never reads its own vehicle-physics.cfg in
+  multiplayer, or one vehicle would weigh differently per player (the driver's client simulates it).
 
-  Здесь только почта. Работа — в Java (ServerTable), до неё достаём через
-  LabVehiclePhysicsNet, который открывает для Lua ZombieBuddy.
+  Only the messaging lives here. The work is done in Java (ServerTable), reached through
+  LabVehiclePhysicsNet, which ZombieBuddy exposes to Lua.
 
-  Почему просим из OnTick, а не из OnGameStart. sendClientCommand уходит в сеть только
-  при GameClient.ingame, а флаг ставится в IngameState.UpdateStuff() — уже после
-  OnGameStart. Раньше этого команда молча уходит по пути одиночной игры и до сервера не
-  доходит. Поэтому ждём clientReady() и повторяем, пока не ответят.
+  Why we request from OnTick and not from OnGameStart: sendClientCommand goes over the network
+  only when GameClient.ingame is set, and that flag is set in IngameState.UpdateStuff(), after
+  OnGameStart. Before that the command silently takes the singleplayer path and never reaches
+  the server. So we wait for clientReady() and repeat until the server answers.
 ]]
 
 if not isClient() then return end
@@ -52,7 +52,7 @@ end
 
 local function onServerCommand(module, command, args)
     if module ~= MODULE or command ~= "table" then return end
-    -- Приходит и в ответ на запрос, и рассылкой, когда на сервере поправили файл.
+    -- Arrives both as a reply to the request and as a broadcast when the file is edited on the server.
     received = true
     LabVehiclePhysicsNet.receiveServerTable(args)
 end

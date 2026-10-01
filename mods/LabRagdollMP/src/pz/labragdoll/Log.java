@@ -1,11 +1,11 @@
 package pz.labragdoll;
 
 /**
- * Лог мода: важное и подробности. Как в LabVehiclePhysics.
+ * The mod's log: the essentials and the details. Same as in LabVehiclePhysics.
  *
- * {@link #info} — всегда: загрузка, предохранитель, снятые замки, ошибки.
- * {@link #debug} — только в сборке лаборатории (в jar лежит метка {@code DevBuild}) или с ключом
- * JVM {@code -Dlabvehicle.verbose=true}: отчёт раз в 15 с и строки по отдельным зомби.
+ * {@link #info}: always (loading, the safety gate, lifted locks, errors).
+ * {@link #debug}: only in the lab build (the jar contains the {@code DevBuild} marker) or with the
+ * JVM flag {@code -Dlabvehicle.verbose=true}: a report every 15 s and lines on individual zombies.
  */
 public final class Log {
 

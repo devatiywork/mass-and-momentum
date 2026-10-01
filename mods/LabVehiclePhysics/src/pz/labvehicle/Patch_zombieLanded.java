@@ -3,16 +3,16 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Клиент водителя: сбитое тело легло — точка приземления уходит серверу ({@link CorpseSync}).
+ * Driver's client: a hit body has landed, the server gets the landing point ({@link CorpseSync}).
  *
- * {@code ZombieOnGroundState} — состояние «лежит»: в него зомби переходит, когда кончился
- * рэгдолл ({@code vehicleCollision-ragdoll/to_onground.xml}: {@code !isSimulationActive}) или
- * анимация падения. У мёртвого зомби {@code enter()} тут же зовёт {@code die()}, так что вход —
- * последний момент, когда живое положение тела и есть положение будущего трупа.
+ * {@code ZombieOnGroundState} is the "lying" state: a zombie enters it when the ragdoll ends
+ * ({@code vehicleCollision-ragdoll/to_onground.xml}: {@code !isSimulationActive}) or the fall
+ * animation does. For a dead zombie {@code enter()} immediately calls {@code die()}, so entry is
+ * the last moment when the live position of the body is the position of the future corpse.
  *
- * На сервере и у зомби, которых не сбивал наш водитель, стоит одну проверку volatile-флага.
+ * On the server and for zombies our driver did not hit, this costs one volatile flag check.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines enter() into the game's method: public members only, no lambdas.
  */
 @Patch(className = "zombie.ai.states.ZombieOnGroundState", methodName = "enter", warmUp = true)
 public class Patch_zombieLanded {

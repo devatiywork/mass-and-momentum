@@ -3,20 +3,20 @@ package pz.labvehicle;
 import java.lang.reflect.Method;
 
 /**
- * Мостик к {@link NativePatch}.
+ * A bridge to {@link NativePatch}.
  *
- * Зачем он нужен. {@code NativePatch} использует Foreign Function &amp; Memory API, который
- * появился в Java 22, поэтому собирается под {@code --release 25}. Весь остальной мод
- * собирается под 17 — так спокойнее для ByteBuddy, который встраивает наши advice
- * в классы игры.
+ * Why it is needed. {@code NativePatch} uses the Foreign Function &amp; Memory API, which
+ * appeared in Java 22, so it is compiled with {@code --release 25}. The rest of the mod is
+ * compiled for 17: that is safer for ByteBuddy, which inlines our advice
+ * into the game's classes.
  *
- * Смешивать их напрямую нельзя: javac с {@code --release 17} откажется читать class-файл
- * 25-й версии с classpath. Поэтому единственное обращение к {@code NativePatch} идёт
- * рефлексией — одна строка вместо ста пятидесяти, которые были бы, пиши мы через FFM
- * рефлексией целиком.
+ * The two cannot be mixed directly: javac with {@code --release 17} refuses to read a version 25
+ * class file from the classpath. So the only call into {@code NativePatch} goes through
+ * reflection: one line instead of the hundred and fifty it would take to write the FFM code
+ * entirely through reflection.
  *
- * Сюда же вынесена обработка отсутствия класса: если по какой-то причине {@code NativePatch}
- * не собрался или JVM старше 22, мод продолжит работать с ванильным пределом подвески.
+ * Handling of a missing class lives here too: if for some reason {@code NativePatch} was not
+ * built or the JVM is older than 22, the mod keeps working with the vanilla suspension ceiling.
  */
 public final class NativeBridge {
 

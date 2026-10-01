@@ -5,25 +5,25 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Снятие обрезки топлива по ёмкости предмета-бака.
+ * Lifts the fuel clamp imposed by the capacity of the gas tank item.
  *
- * <h2>Зачем</h2>
- * Мы поднимаем объём бака через {@link Patch_tankCapacity}, подменяя возврат
- * {@code VehiclePart.getContainerCapacity()}. Но количество топлива при записи режется
- * по другому значению — по ёмкости самого ПРЕДМЕТА:
+ * <h2>Why</h2>
+ * We raise the tank volume through {@link Patch_tankCapacity} by replacing the return value of
+ * {@code VehiclePart.getContainerCapacity()}. But on write the fuel amount gets clamped by a
+ * different value, the capacity of the ITEM itself:
  * <pre>
  * // VehiclePart.setContainerContentAmount(amount, force, noUpdateMass)
  * int cap = this.scriptPart.container.capacity;
  * if (this.getInventoryItem() != null) {
- *     cap = this.getInventoryItem().getMaxCapacity();   // мимо нашего патча
+ *     cap = this.getInventoryItem().getMaxCapacity();   // bypasses our patch
  * }
  * if (!force) {
  *     amount = Math.min(amount, cap);
  * }
  * </pre>
  *
- * В сервисе мы зовём перегрузку с {@code force = true} и обрезку обходим. Но на клиенте
- * есть путь, где {@code force} нам не подконтролен — приём данных по сети:
+ * In the service we call the overload with {@code force = true} and so avoid the clamp. But the
+ * client has a path where {@code force} is out of our control, receiving data over the network:
  * <pre>
  * // VehiclePartModData
  * part.getModData().load(bb.bb, 249);
@@ -31,29 +31,29 @@ import me.zed_0xff.zombie_buddy.Patch;
  *     part.setContainerContentAmount(part.getContainerContentAmount());   // force = false
  * }
  * </pre>
- * То есть клиент получает от сервера честные 659 литров и тут же сам себе их обрезает
- * до ёмкости своего предмета. У танка это 33 литра — практически пустой бак.
+ * So the client receives the true 659 litres from the server and at once clamps them itself
+ * to the capacity of its own item. A military tank gets 33 litres: practically empty.
  *
- * <h2>Почему патчим геттер, а не поле</h2>
- * Очевидное решение — позвать {@code item.setMaxCapacity()} — не годится: поле
- * сериализуется ({@code InventoryItem} пишет его в сейв), и увеличенная ёмкость осталась
- * бы у предмета навсегда, даже после выключения мода. Запись идёт напрямую через поле,
- * мимо геттера, поэтому подмена возврата в сейв не попадает.
+ * <h2>Why we patch the getter, not the field</h2>
+ * The obvious solution, calling {@code item.setMaxCapacity()}, will not do: the field is
+ * serialised ({@code InventoryItem} writes it to the save), and the raised capacity would stay
+ * with the item forever, even after the mod is turned off. The save writes the field directly,
+ * bypassing the getter, so the replaced return value never reaches the save.
  *
- * <h2>Почему это безопасно</h2>
- * Мы делаем обрезку лишь ПЕРМИССИВНОЙ, а не задаём настоящую ёмкость. Настоящая остаётся
- * за {@link Patch_tankCapacity}, и её же использует ванильная проверка переполнения:
+ * <h2>Why this is safe</h2>
+ * We only make the clamp PERMISSIVE; we do not set the real capacity. The real one stays with
+ * {@link Patch_tankCapacity}, and the vanilla overflow check uses that same value:
  * <pre>
  * // BaseVehicle.update()
  * if (gasTank.getContainerContentAmount() > gasTank.getContainerCapacity()) {
  *     gasTank.setContainerContentAmount(gasTank.getContainerCapacity());
  * }
  * </pre>
- * Так что лишнего топлива в баке не окажется — просто перестанет срезаться нужное.
+ * So no excess fuel ends up in the tank; the fuel that belongs there simply stops being cut off.
  *
- * Трогаем только предметы-баки и только когда в конфиге есть правила с объёмом.
+ * We touch only gas tank items, and only when the config has rules with a tank volume.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit(): public members only, no lambdas.
  */
 @Patch(className = "zombie.inventory.InventoryItem", methodName = "getMaxCapacity", warmUp = true)
 public class Patch_tankItemCapacity {

@@ -1,8 +1,8 @@
 package pz.labvehicle;
 
 /**
- * Метка сборки лаборатории: этот класс кладётся только в jar лаборатории, в jar для Мастерской
- * build.sh его не берёт. См. {@link Dev}.
+ * Lab build marker: this class goes only into the lab jar; build.sh leaves it out of the Workshop
+ * jar. See {@link Dev}.
  */
 final class DevBuild {
 

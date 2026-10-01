@@ -3,16 +3,16 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Растяжка на NaN, точка 1: кто записал не-число в координату X ({@link NanGuard#badWrite}).
+ * NaN tripwire, point 1: who wrote a NaN into coordinate X ({@link NanGuard#badWrite}).
  *
- * setX не переопределён ни у машины, ни у персонажей, ни у зомби, поэтому патч на
- * IsoMovingObject видит все записи через сеттер — в том числе
- * {@code VehiclePhysicsPacket.processServer}, который пишет в машину координаты из пакета.
- * setX зовётся тысячи раз за кадр: на быстром пути только сравнение числа, предохранитель
- * проверяется уже в badWrite.
+ * setX is not overridden by vehicles, characters or zombies, so the patch on
+ * IsoMovingObject sees every write through the setter, including
+ * {@code VehiclePhysicsPacket.processServer}, which writes the packet's coordinates into the
+ * vehicle. setX is called thousands of times per frame: the fast path is only a number
+ * comparison, and the safety gate is checked later, in badWrite.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.iso.IsoMovingObject", methodName = "setX")
 public class Patch_nanWriteX {

@@ -3,16 +3,16 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Кусты, часть 2: вместо ванильного импульса каждый кадр — одно списание энергии за
- * контакт, см. {@link VegetationDrag}.
+ * Bushes, part 2: instead of a vanilla impulse every frame, a single energy deduction per
+ * contact; see {@link VegetationDrag}.
  *
- * Ваниль зовёт {@code applyImpulseFromHitPlant(obj, 0.025 или 0.1)} из
- * {@code checkCollisionWithPlant} каждый кадр, пока машина трётся о куст или молодое дерево.
- * Пропускаем все эти вызовы; при первом касании VegetationDrag сам зовёт тот же метод с
- * посчитанной величиной — такой вызов помечен {@code VegetationDrag.ownCall} и проходит.
+ * Vanilla calls {@code applyImpulseFromHitPlant(obj, 0.025 or 0.1)} from
+ * {@code checkCollisionWithPlant} every frame while the vehicle rubs against a bush or young tree.
+ * We skip all those calls; on the first touch VegetationDrag calls the same method itself with
+ * the computed amount, and that call is marked {@code VegetationDrag.ownCall} and goes through.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "applyImpulseFromHitPlant", warmUp = true)
 public class Patch_plantImpulse {

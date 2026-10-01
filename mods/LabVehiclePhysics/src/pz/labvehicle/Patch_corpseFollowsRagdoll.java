@@ -5,43 +5,43 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Этап 1.8: труп едет вместе с машиной, а не телепортируется к месту удара.
+ * Stage 1.8: the corpse rides along with the vehicle instead of teleporting to the impact point.
  *
- * Что происходит в ванили. Сбитый на большой скорости зомби умирает от первого удара
- * (здоровье 1.8-2.1, урон от наезда до 10 — смерть с одного касания задумана), но его
- * рэгдолл продолжает симулироваться и тело тащит на капоте. При этом ЛОГИЧЕСКАЯ координата
- * персонажа за рэгдоллом не идёт: её подтягивает анимационная система живого персонажа
- * (AnimationPlayer: deferredMovement = (позиция_рэгдолла - позиция_персонажа) * вес),
- * а у мёртвого эта ветка не работает. Когда рэгдолл заканчивается, труп проявляется
- * на своей старой координате — выглядит как телепорт назад, к месту столкновения.
+ * What happens in vanilla. A zombie hit at high speed dies from the first impact
+ * (health 1.8-2.1, run-over damage up to 10: death on first contact is by design), but its
+ * ragdoll keeps simulating and the body is carried along on the hood. Meanwhile the character's
+ * LOGICAL position does not follow the ragdoll: for a living character the animation system pulls
+ * it along (AnimationPlayer: deferredMovement = (ragdoll_position - character_position) * weight),
+ * but for a dead one this branch does not run. When the ragdoll ends, the corpse shows up
+ * at its old position, which looks like a teleport back to the collision point.
  *
- * Чиним: пока рэгдолл активен, сами переносим логическую координату мёртвого персонажа
- * в позицию, которую считает рэгдолл. Используем штатные методы игры:
- * setPosition(x,y,z) + setCurrentSquareFromPosition(), второй перерегистрирует объект
- * на нужной клетке мира — без этого тело осталось бы числиться на старой клетке
- * и, например, не открывалось бы при обыске.
+ * The fix: while the ragdoll is active, we move the dead character's logical position ourselves
+ * to the position the ragdoll computes. We use the game's stock methods:
+ * setPosition(x,y,z) + setCurrentSquareFromPosition(); the second one re-registers the object
+ * on the right world square. Without it the body would stay registered on the old square
+ * and, for example, would not open when searched.
  *
- * Живых не трогаем: ими занимается анимационная система, и вмешиваться туда незачем.
+ * Living characters are left alone: the animation system handles them, no need to interfere.
  *
- * <h2>Высоту не переносим (26.09.2026)</h2>
- * Высота в позиции рэгдолла — это поза, а не положение тела в мире: упав, зомби
- * опускает таз на треть метра, но остаётся на той же клетке. Раньше при таком
- * провале ниже нуля перенос отклонялся целиком — 775 раз за сессию, — и тело на
- * эти кадры переставало следовать и по горизонтали. Теперь x и y берём у рэгдолла,
- * а высоту оставляем свою. Машины в PZ ездят только по нулевому этажу
- * ({@code AddVehicleCommand}: "Z coordinate must be 0 for now"), так что сбитое тело
- * этаж не меняет, а высоту на клетке игра выставляет сама.
+ * <h2>Height is not copied from the ragdoll (26.09.2026)</h2>
+ * The height in the ragdoll position is a pose, not the body's place in the world: after falling,
+ * a zombie lowers its pelvis by a third of a meter but stays on the same square. Previously, such
+ * a dip below zero got the whole move rejected (775 times in one session), and for those frames
+ * the body stopped following horizontally as well. Now x and y come from the ragdoll,
+ * and the character keeps its own height. Vehicles in PZ drive only on floor zero
+ * ({@code AddVehicleCommand}: "Z coordinate must be 0 for now"), so a body that is hit
+ * does not change floors, and the game sets the height within the square itself.
  *
- * <h2>Чего здесь делать НЕ надо</h2>
- * 26.09.2026 я решил, что наша запись позиции замыкает петлю через таз, и перевёл
- * патч на приращения с вычетом собственного прошлого хода. Это было неверно:
- * {@code RagdollController.calculateRagdollWorldTransform} привязывает рэгдолл к
- * позиции персонажа, и положение таза остаётся настоящим положением тела — наши
- * записи его не портят. Вычитая несуществующую петлю, патч вёл персонажа за телом
- * вполсилы: сдвиг, ноль, сдвиг, ноль. В игре это выглядело как двоение — рэгдолл
- * рисуется в одном месте, труп в отстающем, — а после конца рэгдолла труп
- * оказывался далеко позади. Проверка моделью этого не поймала: модель проверяла
- * мою же гипотезу, а не игру. Коммит 1651e00, откат — следующий.
+ * <h2>What NOT to do here</h2>
+ * On 26.09.2026 I decided that our position writes close a loop through the pelvis, and switched
+ * the patch to deltas minus its own previous step. That was wrong:
+ * {@code RagdollController.calculateRagdollWorldTransform} anchors the ragdoll to the
+ * character's position, and the pelvis position remains the true position of the body; our
+ * writes do not corrupt it. Subtracting a loop that did not exist, the patch moved the character
+ * after the body at half strength: shift, zero, shift, zero. In game it looked like a double
+ * image: the ragdoll drawn in one place, the corpse in a lagging one; and after the ragdoll ended
+ * the corpse ended up far behind. Checking with a model did not catch this: the model tested
+ * my own hypothesis, not the game. Commit 1651e00; the revert is the next one.
  */
 @Patch(className = "zombie.core.physics.RagdollController", methodName = "postUpdate", warmUp = true)
 public class Patch_corpseFollowsRagdoll {
@@ -55,46 +55,46 @@ public class Patch_corpseFollowsRagdoll {
     }
 
     public static final class Impl {
-        /** Не дёргаем клетку, если сдвиг меньше этого (в тайлах). */
+        /** Leave the square alone if the shift is below this (in tiles). */
         public static final float MIN_MOVE = 0.05f;
         /**
-         * Потолок скачка за кадр, в тайлах (тайл примерно метр).
+         * Cap on the jump per frame, in tiles (a tile is about a meter).
          *
-         * Было 20, то есть сорок метров за кадр. Лог показал, что рэгдолл в это окно
-         * упирался окно за окном: max 19.98, 19.85, 19.78 при среднем шаге 3 тайла.
-         * Такие значения — мусор, а мы их применяли, тело улетало за пределы
-         * подгруженных чанков и молча удалялось (подробности у {@link #hasSquare}).
+         * It used to be 20, i.e. forty meters per frame. The log showed the ragdoll hitting
+         * this cap report after report: max 19.98, 19.85, 19.78 with a mean step of 3 tiles.
+         * Such values are garbage, yet we applied them: the body flew off beyond the
+         * loaded chunks and was silently deleted (details at {@link #hasSquare}).
          *
-         * Четыре тайла за кадр — это 864 км/ч при 60 fps и 216 км/ч даже при 15 fps,
-         * то есть для трупа на бампере здесь всё ещё огромный запас.
-         * Сколько на самом деле отсекается, покажет счётчик rejFar в сводке.
+         * Four tiles per frame is 864 km/h at 60 fps and 216 km/h even at 15 fps,
+         * so for a corpse on the bumper there is still a huge margin here.
+         * How much actually gets cut off is shown by the rejFar counter in the summary.
          */
         public static final float MAX_JUMP = 4.0f;
 
         public static volatile boolean broken = false;
         public static Method rGetChar, rX, rY;
         public static Method cIsDead, cGetX, cGetY, cGetZ, cSetPosition, cSetSquare;
-        /** Для проверки, что в точке назначения вообще есть клетка мира. */
+        /** To check that the destination has a world square at all. */
         public static Method cGetCell, cellGetSquare;
-        /** Приватное поле IsoGameCharacter.diedBody — сам объект трупа, геттера нет. */
+        /** Private field IsoGameCharacter.diedBody: the corpse object itself, no getter. */
         public static java.lang.reflect.Field cDiedBody;
         public static Method bSetPosition, bSetSquare;
         public static long corpseMoves = 0L;
         /**
-         * Ссылку на труп приходится кэшировать: VirtualZombieManager возвращает объект
-         * зомби в пул и зовёт clearDiedBody(), так что поле diedBody видно буквально
-         * один кадр из полутора сотен. Ловим, пока видно, и дальше двигаем по своей ссылке.
+         * The corpse reference has to be cached: VirtualZombieManager returns the zombie object
+         * to the pool and calls clearDiedBody(), so the diedBody field is visible for literally
+         * one frame in 150. Catch it while visible, then keep moving it via our own reference.
          */
         public static final java.util.Map<Object, Object> CORPSE_CACHE = new java.util.WeakHashMap<Object, Object>();
         public static final java.util.Map<Object, Long> CORPSE_SINCE = new java.util.WeakHashMap<Object, Long>();
-        /** Дольше этого труп за рэгдоллом не таскаем. */
+        /** Do not drag the corpse after the ragdoll for longer than this. */
         public static final long CORPSE_MAX_NANOS = 8_000_000_000L;
         public static boolean logged = false;
         public static long moves = 0L;
         public static double sumDist = 0.0;
         public static double maxDist = 0.0;
         public static long lastReportNanos = 0L;
-        /** Отклонённые переносы, по причинам. Нужны, чтобы видеть, как часто рэгдолл врёт. */
+        /** Rejected moves, by reason. Needed to see how often the ragdoll lies. */
         public static long rejNaN = 0L;
         public static long rejFar = 0L;
         public static long rejNoSquare = 0L;
@@ -116,17 +116,17 @@ public class Patch_corpseFollowsRagdoll {
                     initChar(chr.getClass());
                 }
                 if (!((Boolean) cIsDead.invoke(chr)).booleanValue()) {
-                    // объект зомби мог уйти в пул и переиспользоваться под живого —
-                    // тогда старый труп к нему отношения не имеет
+                    // the zombie object may have gone back to the pool and been reused for a
+                    // living zombie; then the old corpse has nothing to do with it
                     synchronized (CORPSE_CACHE) {
                         CORPSE_CACHE.remove(chr);
                         CORPSE_SINCE.remove(chr);
                     }
-                    return;   // живого ведёт анимационная система
+                    return;   // a living one is driven by the animation system
                 }
-                // Сводка идёт ДО разбора: если рэгдолл врёт и все переносы отклоняются,
-                // до конца метода мы не доходим и молчали бы как раз тогда, когда важнее
-                // всего это видеть.
+                // The summary goes BEFORE the checks: if the ragdoll lies and every move is
+                // rejected, we never reach the end of the method and would stay silent exactly
+                // when it matters most to see it.
                 report();
                 float nx = ((Float) rX.invoke(ragdoll)).floatValue();
                 float ny = ((Float) rY.invoke(ragdoll)).floatValue();
@@ -137,12 +137,12 @@ public class Patch_corpseFollowsRagdoll {
                 float ox = ((Float) cGetX.invoke(chr)).floatValue();
                 float oy = ((Float) cGetY.invoke(chr)).floatValue();
                 float oz = ((Float) cGetZ.invoke(chr)).floatValue();
-                // Высоту берём свою: у рэгдолла это поза, а не этаж (см. заголовок класса).
-                // Но и своя бывает ниже нуля: пока рэгдолл ещё живой, ваниль сама двигает
-                // персонажа за ним по высоте (doDeferredMovementFromRagdoll: setZ(getZ() + dz)),
-                // и таз утягивает его под пол. В логе: "move a body to 11701.3, 6805.0, -0.1
-                // where the world has no square" — тело целое, но не двигалось. Отрицательную
-                // высоту считаем полом; второй этаж не страдает, меняется только минус.
+                // Height stays our own: the ragdoll's is a pose, not a floor (see class header).
+                // Ours can dip below zero too: while the zombie is still alive, vanilla itself
+                // moves it in Z (doDeferredMovementFromRagdoll: setZ(getZ() + dz)), and the
+                // pelvis drags it under the floor. Log: "move a body to 11701.3, 6805.0, -0.1
+                // where the world has no square": the body was intact but did not move. Negative
+                // height counts as the floor; upper floors are unaffected, only negatives change.
                 float nz = oz < 0.0f ? 0.0f : oz;
                 float dx = nx - ox, dy = ny - oy;
                 float dist = (float) Math.sqrt(dx * dx + dy * dy);
@@ -165,8 +165,8 @@ public class Patch_corpseFollowsRagdoll {
                     Log.debug("[LabVehiclePhysics] corpse moved with its ragdoll for the first time - no teleport expected");
                 }
 
-                // ГЛАВНОЕ: труп создаётся в момент смерти на месте удара и дальше координат
-                // не меняет — своего рэгдолла у него нет. Двигаем его тем же путём.
+                // KEY POINT: the corpse is created at the moment of death at the impact point and
+                // never moves after that: it has no ragdoll of its own. Move it the same way.
                 Object corpse = cDiedBody.get(chr);
                 long nowNanos = System.nanoTime();
                 synchronized (CORPSE_CACHE) {
@@ -177,7 +177,7 @@ public class Patch_corpseFollowsRagdoll {
                     } else {
                         Long since = CORPSE_SINCE.get(chr);
                         if (since != null && nowNanos - since.longValue() < CORPSE_MAX_NANOS) {
-                            corpse = CORPSE_CACHE.get(chr);   // поле уже обнулили — берём своё
+                            corpse = CORPSE_CACHE.get(chr);   // field already cleared, use ours
                         } else if (since != null) {
                             CORPSE_CACHE.remove(chr);
                             CORPSE_SINCE.remove(chr);
@@ -206,37 +206,37 @@ public class Patch_corpseFollowsRagdoll {
         }
 
         /**
-         * Есть ли в точке назначения клетка мира.
+         * Whether the destination has a world square.
          *
-         * Зачем это вообще. {@code setCurrentSquareFromPosition()} присваивает результат
-         * поиска БЕЗУСЛОВНО, в том числе null:
+         * Why this is needed at all. {@code setCurrentSquareFromPosition()} assigns the lookup
+         * result UNCONDITIONALLY, null included:
          * <pre>
          * IsoGridSquare current = this.getCell().getGridSquare(x1, y1, z1);
          * if (current == null) {
-         *     for (int n = PZMath.fastfloor(z1); n &gt;= 0; n--) {   // только вниз, тот же x,y
+         *     for (int n = PZMath.fastfloor(z1); n &gt;= 0; n--) {   // downward only, same x,y
          *         current = this.getCell().getGridSquare(x1, y1, n);
          *         if (current != null) break;
          *     }
          * }
          * this.setCurrent(current);
          * </pre>
-         * Запасной поиск спасает только от промаха по вертикали. Если x,y вылетели за
-         * подгруженные чанки, null вернут все попытки. А дальше, в {@code IsoZombie.update}:
+         * The fallback search only rescues a vertical miss. If x,y flew off beyond the
+         * loaded chunks, every attempt returns null. And then, in {@code IsoZombie.update}:
          * <pre>
          * if (this.current == null &amp;&amp; (!GameClient.client || !this.isRemoteZombie())) {
          *     this.removeFromWorld();
          *     this.removeFromSquare();
          * }
          * </pre>
-         * Ни смерти, ни трупа, ни звука — объект вычёркивается молча.
+         * No death, no corpse, no sound: the object is silently erased.
          *
-         * Это и была пропажа зомби при наезде на толпу: сбитый умирает с первого касания
-         * (урон до 10 при здоровье 1.8-2.1), сразу попадает под этот патч, и часть тел
-         * мы сами уносили в пустоту. В толпе рэгдоллы проникают друг в друга, Bullet
-         * расталкивает их рывками, выбросов больше — потому и заметно именно там.
+         * This is what made zombies vanish when driving into a crowd: a zombie that is hit dies
+         * on first contact (up to 10 damage at 1.8-2.1 health), falls under this patch at once,
+         * and some of the bodies we carried off into the void ourselves. In a crowd, ragdolls
+         * interpenetrate and Bullet jerks them apart: more outliers, which is why it shows there.
          *
-         * Повторяем ту же лестницу вниз, что и игра, чтобы не отказывать в переносе там,
-         * где ваниль справилась бы сама.
+         * We repeat the same downward ladder as the game, so as not to refuse a move where
+         * vanilla would have managed on its own.
          */
         public static boolean hasSquare(Object chr, float nx, float ny, float nz) throws Exception {
             Object cell = cGetCell.invoke(chr);

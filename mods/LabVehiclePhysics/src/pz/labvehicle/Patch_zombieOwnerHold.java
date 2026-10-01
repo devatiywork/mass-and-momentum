@@ -3,22 +3,22 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Сервер: пока сбитый машиной зомби летит, его хозяин — водитель, и менять его нельзя
- * ({@link CorpseSync}).
+ * Server: while a zombie hit by a vehicle is in flight, its owner is the driver, and the owner
+ * must not change ({@link CorpseSync}).
  *
- * {@code NetworkZombieManager.updateAuth} каждый кадр сервера на каждого зомби пересматривает
- * хозяина: раз в 2 секунды отдаёт зомби игроку, за которым тот гонится, или ближайшему. Тело
- * летит дольше — и хозяином стал бы игрок, у которого рэгдолла нет, а сообщения водителя сервер
- * перестал бы принимать ({@code NetworkZombiePacker.parseZombie}: только от хозяина).
+ * {@code NetworkZombieManager.updateAuth} reviews the owner of every zombie on every server frame:
+ * once every 2 seconds it hands the zombie to the player it is chasing, or to the nearest one. The
+ * body flies longer than that, so a player with no ragdoll would become the owner, and the server
+ * would stop taking the driver's messages ({@code NetworkZombiePacker.parseZombie}: owner only).
  *
- * Пока никого не ждём, стоит одну проверку volatile-флага на зомби за кадр.
+ * While nothing is pending, this costs one volatile flag check per zombie per frame.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines enter() into the game's method: public members only, no lambdas.
  */
 @Patch(className = "zombie.popman.NetworkZombieManager", methodName = "updateAuth", warmUp = true)
 public class Patch_zombieOwnerHold {
 
-    /** @return true — пропустить пересмотр хозяина. */
+    /** @return true = skip the owner review. */
     @Patch.OnEnter(skipOn = true)
     public static boolean enter(@Patch.Argument(0) Object zombie) {
         return CorpseSync.anyPending && CorpseSync.holdOwner(zombie);

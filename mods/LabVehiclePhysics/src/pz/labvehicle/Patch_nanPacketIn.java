@@ -3,12 +3,12 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Растяжка на NaN, точка 4: сервер получил пакет физики машины. processServer пишет из него
- * x, y, z, поворот и скорость в машину без единой проверки; пакет с не-числом не применяем
- * вовсе ({@link NanGuard#packetIn}) — машина остаётся в последнем нормальном состоянии.
+ * NaN tripwire, point 4: the server has received a vehicle physics packet. processServer writes
+ * its x, y, z, rotation and velocity into the vehicle without a single check; a packet with a NaN
+ * is not applied at all ({@link NanGuard#packetIn}), so the vehicle stays in its last good state.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.network.packets.vehicle.VehiclePhysicsPacket", methodName = "processServer", warmUp = true)
 public class Patch_nanPacketIn {

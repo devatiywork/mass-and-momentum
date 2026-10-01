@@ -6,33 +6,33 @@ import java.util.WeakHashMap;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Вариант 2: отложить превращение в труп, пока тело прижато к машине.
+ * Option 2: postpone turning into a corpse while the body is pinned to the vehicle.
  *
- * Почему предыдущие попытки не сработали. В мультиплеере труп создаёт СЕРВЕР:
+ * Why the previous attempts did not work. In multiplayer the corpse is created by the SERVER:
  * <pre>
  * public final void die() {
- *     if (GameClient.client) this.getNetworkCharacterAI().onDied();  // клиент только принимает пакет
- *     else                   this.becomeCorpse();                    // труп рождается здесь
+ *     if (GameClient.client) this.getNetworkCharacterAI().onDied();  // client only receives a packet
+ *     else                   this.becomeCorpse();                    // the corpse is born here
  * }
  * </pre>
- * Рэгдолл при этом живёт только на клиенте — сервер о полёте тела не знает вообще
- * и ставит труп там, где зомби умер, то есть на месте удара.
+ * Meanwhile the ragdoll lives only on the client: the server knows nothing of the body's flight
+ * and puts the corpse where the zombie died, i.e. at the point of impact.
  *
- * Здесь заходим не со стороны картинки, а со стороны сервера: не трогаем ни урон,
- * ни смерть, а ОТКЛАДЫВАЕМ момент создания трупа, пока зомби в контакте с машиной.
- * Контакт закончился — die() проходит штатно, и труп рождается уже на той позиции,
- * куда зомби к этому моменту утащило. Серверу для этого ничего знать про рэгдолл не нужно.
+ * Here we come in not from the visual side but from the server side: we touch neither damage
+ * nor death, but POSTPONE the corpse's creation while the zombie is in contact with the vehicle.
+ * Once contact ends, die() goes through as usual, and the corpse is born at the position where
+ * the zombie has been dragged by then. For this the server needs no knowledge of the ragdoll.
  *
- * Страховки: отсрочка не дольше MAX_DEFER_SEC (тело не может остаться неупокоенным
- * навсегда) и короткая пауза GRACE_SEC после потери контакта, чтобы не создать труп
- * в момент, когда тело ещё отлипает от бампера.
+ * Safeguards: the deferral lasts no longer than MAX_DEFER_SEC (a body cannot be left in limbo
+ * forever), plus a short GRACE_SEC pause after contact is lost, so the corpse is not created
+ * at the moment the body is still peeling off the bumper.
  *
- * Для зомби эта отсрочка так и не включается (backlog.md §1a). Зато тем же входом
- * пользуется отлёт сбитого животного: пока оно скользит, die() пропускается, и труп
- * рождается в конце пути ({@link AnimalThrow#holdsDeath}, не дольше 3 с).
+ * For zombies this deferral never actually kicks in (backlog.md §1a). The same entry point,
+ * however, is used by the throw of a hit animal: while it slides, die() is skipped, and the corpse
+ * is born at the end of its path ({@link AnimalThrow#holdsDeath}, no longer than 3 s).
  *
- * С 28.09.2026 тем же входом откладывает смерть и {@link CorpseSync}: на сервере сбитый машиной
- * зомби ждёт точку приземления от водителя.
+ * Since 28.09.2026 {@link CorpseSync} also defers death through the same entry point: on the
+ * server, a zombie hit by a vehicle waits for the landing point from the driver.
  */
 @Patch(className = "zombie.characters.IsoGameCharacter", methodName = "die", warmUp = true)
 public class Patch_deferCorpse {
@@ -43,14 +43,14 @@ public class Patch_deferCorpse {
     }
 
     public static final class Impl {
-        /** Максимальная суммарная отсрочка. */
+        /** Maximum total deferral. */
         public static final float MAX_DEFER_SEC = 4.0f;
-        /** Сколько ждать после потери контакта, прежде чем отпустить. */
+        /** How long to wait after contact is lost before letting go. */
         public static final float GRACE_SEC = 0.35f;
 
         public static volatile boolean broken = false;
         public static java.lang.reflect.Method mVehicleCollision;
-        /** персонаж -> {когда отсрочка началась, когда последний раз был контакт} */
+        /** character -> {when the deferral started, when contact was last seen} */
         public static final Map<Object, long[]> STATE = new WeakHashMap<Object, long[]>();
 
         public static long deferred = 0L;
@@ -59,7 +59,7 @@ public class Patch_deferCorpse {
         public static boolean logged = false;
         public static long lastReportNanos = 0L;
 
-        /** @return true = отложить смерть (пропустить die() в этом вызове). */
+        /** @return true = defer death (skip die() in this call). */
         public static boolean shouldDefer(Object chr) {
             if (!LabGate.active()) {
                 return false;
@@ -67,17 +67,17 @@ public class Patch_deferCorpse {
             if (broken || chr == null) {
                 return false;
             }
-            // Сбитое животное ещё летит: труп пусть родится там, где тело остановится.
-            // Это отдельный от зомби путь — см. AnimalThrow.
+            // A hit animal is still flying: let the corpse be born where the body stops.
+            // This path is separate from the zombie one; see AnimalThrow.
             if (AnimalThrow.holdsDeath(chr)) {
                 return true;
             }
             if (!LabSettings.corpseFollows()) {
                 return false;
             }
-            // Сервер в сети: сбитый машиной зомби ещё летит у водителя — труп родится там,
-            // где тело ляжет, когда водитель пришлёт точку (CorpseSync). Это то, чего не смог
-            // вариант 2 ниже: признак «летит» ставит сервер сам, при ударе, а не кадровый флаг.
+            // Multiplayer server: the driver still sees the hit zombie flying; the corpse is born
+            // where the body lands, once the driver sends that point (CorpseSync). Option 2 below
+            // failed here: the server sets the "flying" mark itself, at impact, not a per-frame flag.
             if (CorpseSync.deferDeath(chr)) {
                 return true;
             }
@@ -94,7 +94,7 @@ public class Patch_deferCorpse {
                     st = STATE.get(chr);
                     if (st == null) {
                         if (!inContact) {
-                            return false;      // обычная смерть, машина ни при чём
+                            return false;      // an ordinary death, no vehicle involved
                         }
                         st = new long[]{now, now};
                         STATE.put(chr, st);
@@ -115,7 +115,7 @@ public class Patch_deferCorpse {
                         maxHeldSec = heldSec;
                     }
                     report();
-                    return false;              // отпускаем: труп создастся на текущем месте
+                    return false;              // let go: the corpse is created at the current spot
                 }
                 deferred++;
                 report();

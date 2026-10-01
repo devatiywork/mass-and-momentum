@@ -6,7 +6,7 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Второй мультиплеерный замок рэгдолла — в самом геттере опции (Core, 42.20.4):
+ * The second multiplayer lock on ragdolls, in the option getter itself (Core, 42.20.4):
  *
  * <pre>
  * public boolean getOptionUsePhysicsHitReaction() {
@@ -14,12 +14,12 @@ import me.zed_0xff.zombie_buddy.Patch;
  * }
  * </pre>
  *
- * То есть в мультиплеере он возвращает false независимо от настройки, и любой код,
- * который спрашивает «включена ли физическая реакция», получает «нет». Снимаем:
- * при ванильном false отдаём НАСТОЯЩЕЕ значение опции из приватного поля.
+ * So in multiplayer it returns false regardless of the setting, and any code that asks
+ * "is the physics hit reaction on?" gets "no". We lift that: when vanilla returns false,
+ * we return the REAL option value from the private field.
  *
- * Значение опции по умолчанию в игре — true (newOption("usePhysicsHitReaction", true)),
- * так что если пользователь её не выключал руками, здесь будет true.
+ * The option's default in the game is true (newOption("usePhysicsHitReaction", true)),
+ * so unless the user has turned it off by hand, this will be true.
  */
 @Patch(className = "zombie.core.Core", methodName = "getOptionUsePhysicsHitReaction", warmUp = true)
 public class Patch_Core_usePhysicsHitReaction {
@@ -38,12 +38,12 @@ public class Patch_Core_usePhysicsHitReaction {
         public static Method getValue;
         public static Object cachedOption;
 
-        /** @return настоящее значение опции, минуя мультиплеерный замок. */
+        /** @return the real option value, bypassing the multiplayer lock. */
         public static boolean realValue(Object core) {
             if (broken || core == null) {
                 return false;
             }
-            // Мода нет в списке этой игры — например, чужой сервер: оставляем ваниль.
+            // The mod is not in this game's mod list (someone else's server, say): keep vanilla.
             if (!LabGate.active()) {
                 return false;
             }

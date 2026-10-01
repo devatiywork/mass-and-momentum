@@ -3,14 +3,14 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Кооп-сервер с ZombieBuddy, патч 1 из 2: какой сервер запускается. По имени
- * {@link CoopServerAgent} найдёт его ini и проверит, стоит ли там мод.
+ * Co-op server with ZombieBuddy, patch 1 of 2: which server is being launched. By its name
+ * {@link CoopServerAgent} finds its ini and checks whether the mod is listed there.
  *
- * Под имя подходят обе перегрузки launchServer — публичная и приватная, через которую идёт
- * и softreset; имя сервера у обеих первым аргументом.
+ * Both launchServer overloads match the name: the public one and the private one, which
+ * softreset also goes through; both take the server name as the first argument.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.network.CoopMaster", methodName = "launchServer")
 public class Patch_coopServerName {

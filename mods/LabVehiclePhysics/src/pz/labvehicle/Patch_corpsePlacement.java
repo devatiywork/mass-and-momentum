@@ -3,14 +3,14 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Клиент: замер — насколько тело переносится, когда приходит труп с сервера
- * ({@link RemoteRagdoll#onCorpsePacket}). Сама игра это не пишет: её строка «Corpse … teleport»
- * — отладочная и в обычном логе не появляется.
+ * Client: measures how far the body is moved when the corpse arrives from the server
+ * ({@link RemoteRagdoll#onCorpsePacket}). Vanilla does not log this: its "Corpse … teleport"
+ * line is debug-only and never shows up in the normal log.
  *
- * {@code DeadCharacterPacket.processClient} ставит тело на координаты трупа сервера, если клетка
- * другая, и создаёт труп. Здесь только считаем, ничего не меняем.
+ * {@code DeadCharacterPacket.processClient} puts the body at the server corpse's coordinates if the
+ * square differs, and creates the corpse. Here we only measure and change nothing.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines enter() into the game's method: public members only, no lambdas.
  */
 @Patch(className = "zombie.network.packets.character.DeadCharacterPacket", methodName = "processClient", warmUp = true)
 public class Patch_corpsePlacement {

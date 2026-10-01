@@ -7,29 +7,29 @@ import java.util.Map;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Этап 3, патч 2 из 2: подстройка массы на ходу, без перезапуска игры.
+ * Stage 3, patch 2 of 2: adjusting the mass on the fly, without restarting the game.
  *
- * Зачем. Жёсткость подвески зашивается один раз при загрузке (Bullet.defineVehicleScript),
- * а вот масса уходит в физику КАЖДЫЙ кадр:
+ * Why. Suspension stiffness is baked in once at load time (Bullet.defineVehicleScript),
+ * but the mass goes into the physics EVERY frame:
  * <pre>
- * // BaseVehicle.update(), под !GameServer.server
+ * // BaseVehicle.update(), under !GameServer.server
  * Bullet.setVehicleMass(this.vehicleId, this.getFudgedMass());
  * </pre>
- * Значит, подменив возврат getFudgedMass(), массу можно крутить прямо во время игры.
- * Это нужно, чтобы найти потолок: сейчас известно только со слов, что выше ~9-10 тонн
- * колёса уходят под землю, а причина не установлена. Гадать тут нечего — надо померить,
- * и мерить удобнее одним заездом, а не десятью перезапусками.
+ * So by overriding the return value of getFudgedMass(), the mass can be tuned right during play.
+ * This is needed to find the ceiling: for now there are only reports that above ~9-10 tonnes
+ * the wheels sink into the ground, and the cause has not been established. There is nothing to
+ * guess here; it has to be measured, and measuring is easier in one run than over ten restarts.
  *
- * Тот же getFudgedMass() читает наш патч силы удара с этапа 1, так что живая масса
- * влияет и на то, как машина отбрасывает зомби — это тоже видно сразу.
+ * The same getFudgedMass() is read by our hit-force patch from stage 1, so the live mass
+ * also affects how the vehicle knocks zombies back, and that is visible right away too.
  *
- * Пока в файле нет ни одного правила с пометкой {@code live} и выключен переключатель
- * «Масса на лету» на странице песочницы ({@link LabSettings#liveMass}), патч не делает
- * ничего и не стоит ни такта: проверяются два volatile-флага. Переключатель включает
- * подмену для всех машин, у которых масса задана, — груз тогда вес не добавляет.
+ * As long as the file has no rule marked {@code live} and the "Live vehicle mass" switch
+ * on the sandbox page ({@link LabSettings#liveMass}) is off, the patch does nothing
+ * and costs not a single cycle: two volatile flags are checked. The switch turns on the
+ * override for all vehicles that have a mass set; cargo then adds no weight.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в getFudgedMass() — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into getFudgedMass(): public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "getFudgedMass", warmUp = true)
 public class Patch_vehicleLiveMass {
@@ -45,14 +45,14 @@ public class Patch_vehicleLiveMass {
         public static final Map<String, VehicleCfg.Rule> CACHE = new HashMap<String, VehicleCfg.Rule>();
         public static int cachedGeneration = -1;
         /**
-         * Какие пары «машина — масса» уже напечатаны. Каждая печатается один раз.
+         * Which vehicle/mass pairs have already been printed. Each one is printed once.
          *
-         * Раньше сравнивали только с последней напечатанной машиной. Пока {@code live}
-         * стоял у двух машин, это было терпимо. Когда правила с {@code live} получил весь
-         * парк, каждая машина вокруг игрока сбивала «последнюю» и печаталась каждый кадр:
-         * 2 688 строк в секунду, 98% лога клиента. Лог обрезался и терял первые двадцать
-         * минут сессии — вместе со строками, ради которых его читают. Та же ошибка уже
-         * была в логе бака и там была исправлена множеством; сюда урок не перенесли.
+         * Previously it compared only with the last printed vehicle. While {@code live} was set
+         * on two vehicles, that was tolerable. When the whole fleet got rules with {@code live},
+         * every vehicle around the player displaced the "last" one and was printed every frame:
+         * 2 688 lines per second, 98% of the client log. The log got truncated and lost the first
+         * twenty minutes of the session, with the very lines it is read for. The same mistake was
+         * already in the tank log and was fixed there with a set; the lesson was not carried over.
          */
         public static final java.util.Set<String> LOGGED =
                 java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
@@ -65,14 +65,14 @@ public class Patch_vehicleLiveMass {
                 return vanilla;
             }
             try {
-                // Сначала перечитать файл, и только потом смотреть на hasLive.
-                // Обратный порядок был тупиком: флаг выставляется внутри reloadIfNeeded(),
-                // а до него не доходило, потому что дорогу закрывал сам флаг.
+                // Re-read the file first, and only then look at hasLive.
+                // The reverse order was a dead end: the flag is set inside reloadIfNeeded(),
+                // which was never reached because the flag itself blocked the way.
                 VehicleCfg.reloadIfNeeded();
                 VehicleCfg.maybeFallback();
                 VehicleCfg.printSummaryOnce();
-                // Масса на лету: у отдельных правил — флаг live в vehicle-physics.cfg,
-                // у всех машин разом — переключатель на странице песочницы.
+                // Live mass: for individual rules, the live flag in vehicle-physics.cfg;
+                // for all vehicles at once, the switch on the sandbox page.
                 boolean all = LabSettings.liveMass();
                 if (!VehicleCfg.hasLive && !all) {
                     return vanilla;
@@ -100,8 +100,8 @@ public class Patch_vehicleLiveMass {
                 if (rule == null || !(rule.live || all) || rule.mass <= 0.0f) {
                     return vanilla;
                 }
-                // Груз в ключ не входит: он меняется при каждом обыске багажника,
-                // и лог снова наполнился бы повторами.
+                // Cargo is not part of the key: it changes every time the trunk is searched,
+                // and the log would fill up with repeats again.
                 if (LOGGED.add(name + "|" + rule.mass)) {
                     Log.debug("[LabVehiclePhysics] live mass: " + name + " = "
                             + VehicleCfg.fmt(rule.mass) + " kg (game computed " + VehicleCfg.fmt(vanilla) + ")");

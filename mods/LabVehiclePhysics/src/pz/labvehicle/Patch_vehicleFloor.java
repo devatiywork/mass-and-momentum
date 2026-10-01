@@ -6,36 +6,36 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Пол под машинами и замер просадки подвески.
+ * A floor under vehicles, plus a measurement of suspension sag.
  *
- * Почему машина вообще проваливается. Машина в PZ — это btRaycastVehicle: колёс как
- * физических тел нет, из кузова вниз пускается луч, и пружина отталкивает кузов от
- * найденной точки. Земля при этом НЕ имеет коллизии для самого кузова. Пока луч достаёт
- * до земли, всё хорошо. Но дальность луча ограничена ходом подвески, а он в скриптах
- * задан крошечным — 10 см у всей ванили, 12 у Bushmaster, 20 у самого тяжёлого мода.
- * Стоит пружине выбрать этот ход, луч перестаёт доставать до земли, опора пропадает
- * не частично, а полностью, и кузов падает в пустоту.
+ * Why a vehicle falls through at all. A vehicle in PZ is a btRaycastVehicle: there are no wheels
+ * as physical bodies; a ray is cast down from the chassis, and a spring pushes the chassis away
+ * from the point it finds. The ground has NO collision for the chassis itself. As long as the ray
+ * reaches the ground, all is well. But the ray length is limited by the suspension travel, and
+ * the scripts set it tiny: 10 cm in all of vanilla, 12 for Bushmaster, 20 for the heaviest mod.
+ * Once the spring uses up that travel, the ray stops reaching the ground, support is lost
+ * not partially but completely, and the chassis drops into the void.
  *
- * Первая версия этого патча ловила кузов по высоте ноль, и это была ошибка измерения:
- * ноль — это уровень земли, а центр кузова в норме стоит ВЫШЕ него на высоту посадки.
- * Для Bushmaster это 0.47, то есть машина успевала провалиться больше чем на радиус
- * колеса, прежде чем защита срабатывала. Обе ветки эксперимента упирались в один и тот же
- * искусственный пол, и сравнивать их было бессмысленно — прибор был насыщен.
+ * The first version of this patch caught the chassis at height zero, and that was a measurement
+ * error: zero is ground level, while the chassis centre normally sits ABOVE it by the ride height.
+ * For the Bushmaster that is 0.47, so the vehicle managed to sink by more than a wheel radius
+ * before the safeguard kicked in. Both branches of the experiment ran into the same
+ * artificial floor, and comparing them was pointless: the instrument was saturated.
  *
- * Теперь высота посадки считается той же формулой, что и в самой игре при создании машины:
+ * The ride height is now computed by the same formula the game uses when creating a vehicle:
  * <pre>
  * // CarController(BaseVehicle)
  * wheelBottom   = modelOffset.y + wheel(0).offset.y - wheel(0).radius;
  * chassisBottom = centerOfMassOffset.y - extents.y / 2;
  * physicsZ      = floor(getZ()) * 3 * 0.8164967f - min(wheelBottom, chassisBottom);
  * </pre>
- * От неё и отсчитываем: просадка глубже SAG_LIMIT считается провалом, кузов возвращается
- * на SAG_LIFT ниже нормы (не на саму норму — иначе машина будет прыгать).
+ * Everything is measured from it: sag deeper than SAG_LIMIT counts as falling through, and the
+ * chassis is put back at SAG_LIFT below normal (not at normal itself, or the vehicle would hop).
  *
- * И главное: в лог пишется реальная просадка, средняя и худшая. Это и есть прибор,
- * которым меряется, помогает ли увеличение хода подвески.
+ * And most importantly: the log records the real sag, mean and worst. That is the instrument
+ * used to measure whether increasing suspension travel helps.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в update() — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into update(): public members only, no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "update", warmUp = true)
 public class Patch_vehicleFloor {
@@ -46,11 +46,11 @@ public class Patch_vehicleFloor {
     }
 
     public static final class Impl {
-        /** Насколько ниже нормы разрешено просесть, прежде чем вмешиваться. */
+        /** How far below normal the vehicle may sag before we intervene. */
         public static final float SAG_LIMIT = 0.30f;
-        /** На сколько ниже нормы ставим при возврате — чтобы не подбрасывало. */
+        /** How far below normal it is put back, so that it does not get tossed up. */
         public static final float SAG_LIFT = 0.10f;
-        /** Высота одного этажа в единицах физики: 3 * 0.8164967. */
+        /** Height of one floor level in physics units: 3 * 0.8164967. */
         public static final float LEVEL = 2.4494901f;
 
         public static volatile boolean broken = false;
@@ -106,7 +106,7 @@ public class Patch_vehicleFloor {
                     + "sag deeper than this counts as falling through: " + SAG_LIMIT);
         }
 
-        /** Высота, на которой центр кузова стоит в норме. Формула из CarController. */
+        /** Height at which the chassis centre normally sits. Formula from CarController. */
         public static float naturalHeight(Object vehicle, Object script) throws Exception {
             float base = (float) Math.floor(((Float) mGetZ.invoke(vehicle)).floatValue()) * LEVEL;
             Object com = mComOffset.invoke(script);
@@ -114,7 +114,7 @@ public class Patch_vehicleFloor {
             float chassisBottom = fY.getFloat(com) - fY.getFloat(ext) / 2.0f;
             int wheels = ((Integer) mWheelCount.invoke(script)).intValue();
             if (wheels <= 0) {
-                return base + 0.1f;          // прицепы: своя ветка в игре
+                return base + 0.1f;          // trailers: the game has a separate branch for them
             }
             Object w0 = mGetWheel.invoke(script, Integer.valueOf(0));
             Object mo = mModelOffset.invoke(script);
@@ -127,8 +127,8 @@ public class Patch_vehicleFloor {
             if (!LabGate.active()) {
                 return;
             }
-            // Растяжка на NaN — первой: и пол, и деревья ниже читают трансформ машины.
-            // Работает, даже если пол выключился из-за ошибки.
+            // NaN tripwire first: the floor and the trees below both read the vehicle transform.
+            // It works even if the floor has disabled itself after an error.
             NanGuard.vehicle(vehicle);
             if (broken || vehicle == null) {
                 return;
@@ -137,13 +137,13 @@ public class Patch_vehicleFloor {
                 if (mGetWorldTransform == null) {
                     init(vehicle);
                 }
-                // Данные авторов модов могли прийти позже скриптов — доприменяем
-                // здесь: BaseVehicle.update идёт в главном потоке, toBullet() безопасен.
+                // Mod authors' data may have arrived after the scripts, so we finish applying it
+                // here: BaseVehicle.update runs on the main thread, toBullet() is safe.
                 VehicleCfg.reapplyIfPending();
-                // Деревья (TreeBreak): упор в ствол и возврат скорости после повала с разгона.
+                // Trees (TreeBreak): pushing a trunk, and restoring speed after ramming one down.
                 TreeBreak.stepPush(vehicle);
                 TreeBreak.stepPending(vehicle);
-                // Починка и заправка по ключу service — только в сборке лаборатории (см. Dev).
+                // Repair and refuelling via the service key, only in the lab build (see Dev).
                 if (Dev.ENABLED) {
                     VehicleService.maybe(vehicle);
                 }

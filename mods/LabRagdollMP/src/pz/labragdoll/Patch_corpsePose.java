@@ -5,11 +5,11 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Третий мультиплеерный замок рэгдолла: поза трупа.
+ * The third multiplayer lock on ragdolls: the corpse pose.
  *
- * Ваниль, IsoGameCharacter.canUseCurrentPoseForCorpse:
+ * Vanilla, IsoGameCharacter.canUseCurrentPoseForCorpse:
  * <pre>
- * if (GameClient.client || GameServer.server) return false;   // ← снимаем только это
+ * if (GameClient.client || GameServer.server) return false;   // ← we lift only this
  * else if (isSceneCulled())                   return false;
  * else if (!hasActiveModel())                 return false;
  * else {
@@ -19,19 +19,19 @@ import me.zed_0xff.zombie_buddy.Patch;
  * }
  * </pre>
  *
- * Результат используется при создании трупа (IsoDeadBody):
+ * The result is used when the corpse (IsoDeadBody) is created:
  * <pre>
  * if (this.ragdollFall &amp;&amp; died.canUseCurrentPoseForCorpse()) {
- *     ... копируем трансформации всех костей — труп сохраняет позу, в которой упал
+ *     ... copy the transforms of all bones: the corpse keeps the pose it fell in
  * }
  * </pre>
  *
- * То есть в мультиплеере труп ВСЕГДА получает стандартную позу (на спине), даже если
- * тело только что эффектно улетело рэгдоллом и легло как попало. Отсюда заметная подмена:
- * видел одну позу — после превращения в труп стала другая.
+ * So in multiplayer the corpse ALWAYS gets the standard pose (on its back), even if the body
+ * has just flown off spectacularly as a ragdoll and landed any which way. Hence a visible swap:
+ * you saw one pose, and once it turned into a corpse it was a different one.
  *
- * Как и в остальных случаях, не форсируем true, а пересчитываем ванильные условия,
- * пропуская только первую ветку.
+ * As in the other cases, we do not force true but re-evaluate the vanilla conditions,
+ * skipping only the first branch.
  */
 @Patch(className = "zombie.characters.IsoGameCharacter", methodName = "canUseCurrentPoseForCorpse", warmUp = true)
 public class Patch_corpsePose {
@@ -53,7 +53,7 @@ public class Patch_corpsePose {
             if (broken || chr == null) {
                 return false;
             }
-            // Мода нет в списке этой игры — например, чужой сервер: оставляем ваниль.
+            // The mod is not in this game's mod list (someone else's server, say): keep vanilla.
             if (!LabGate.active()) {
                 return false;
             }

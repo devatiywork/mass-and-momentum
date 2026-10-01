@@ -3,27 +3,27 @@ package pz.labvehicle;
 import java.lang.reflect.Method;
 
 /**
- * Настройки мода в песочнице: страница «Физика транспорта» ({@code 42/media/sandbox-options.txt}).
+ * The mod's sandbox settings: the "Vehicle Physics" page ({@code 42/media/sandbox-options.txt}).
  *
- * Хранит их сама игра: в одиночной — в сейве мира, в сети — на сервере, который рассылает
- * свои значения клиентам при входе и пересылает правки админа посреди игры. Нам остаётся
- * только читать {@code SandboxOptions.instance}.
+ * The game itself stores them: in singleplayer in the world save, in multiplayer on the server,
+ * which sends its values to clients when they join and forwards admin edits mid-game. All that
+ * is left for us is to read {@code SandboxOptions.instance}.
  *
- * Читаем не чаще раза в секунду: патчи зовут эти методы каждый кадр на каждую машину и
- * каждого персонажа, а настройки меняют руками. Между чтениями значения лежат в
- * volatile-полях.
+ * We read at most once a second: patches call these methods every frame for every vehicle and
+ * every character, while the settings are changed by hand. Between reads the values sit in
+ * volatile fields.
  *
- * Пока опций нет (игра ещё не дошла до загрузки модов), действуют значения по умолчанию —
- * те же, что в sandbox-options.txt: всё включено, множитель 1, у ванильных машин значения мода.
+ * Until the options exist (the game has not yet got to loading mods), the defaults apply, the
+ * same as in sandbox-options.txt: everything on, multiplier 1, mod values for vanilla vehicles.
  */
 public final class LabSettings {
 
     public static final String PREFIX = "LabVehiclePhysics.";
     public static final long REFRESH_NANOS = 1_000_000_000L;
 
-    /** Ванильные машины: true — значения мода из встроенного справочника, false — как в игре. */
+    /** Vanilla vehicles: true = mod values from the built-in table, false = as in the game. */
     public static volatile boolean vanillaCustom = true;
-    /** Общий множитель тяги всех машин поверх их собственных настроек. */
+    /** Global thrust multiplier for all vehicles, on top of their own settings. */
     public static volatile float powerMul = 1.0f;
     public static volatile boolean zombieImpact = true;
     public static volatile boolean corpseFollows = true;
@@ -32,12 +32,12 @@ public final class LabSettings {
     public static volatile boolean bushes = true;
     public static volatile boolean trees = true;
     /**
-     * Масса на лету для всех машин, у которых она задана ({@link Patch_vehicleLiveMass}): подменяется
-     * каждый кадр, груз не учитывается. Флаг {@code live} у отдельных правил vehicle-physics.cfg
-     * работает и без этой настройки.
+     * Live mass for all vehicles that have a mass set ({@link Patch_vehicleLiveMass}): it is replaced
+     * every frame, cargo is not counted. The {@code live} flag on individual vehicle-physics.cfg
+     * rules works without this setting too.
      */
     public static volatile boolean liveMass = false;
-    /** Таблица машин со страницы «Физика транспорта: машины» — строки через «;», см. {@link VehicleTable}. */
+    /** Vehicle table ("Vehicle Physics: vehicles" page): rows separated by ";", see {@link VehicleTable}. */
     public static volatile String vehicleTable = "";
 
     public static volatile long lastNanos = 0L;
@@ -136,7 +136,7 @@ public final class LabSettings {
                 }
                 return;
             }
-            // Перечисление: 1 — как в игре, 2 — значения мода.
+            // Enum: 1 = as in the game, 2 = mod values.
             vanillaCustom = number(vanilla, 2.0) != 1.0;
             powerMul = (float) Math.max(0.5, Math.min(3.0, number(value("PowerMul"), 1.0)));
             zombieImpact = bool(value("ZombieImpact"), true);
@@ -159,7 +159,7 @@ public final class LabSettings {
         }
     }
 
-    /** Значение опции как объект (Boolean, Double; у перечисления тоже Double), null — опции нет. */
+    /** Option value as an object (Boolean, Double; an enum is Double too), null if no such option. */
     public static Object value(String name) throws Exception {
         Object option = mGetOption.invoke(options, PREFIX + name);
         if (option == null) {

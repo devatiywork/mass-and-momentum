@@ -4,46 +4,46 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * Рэгдолл сбитого зомби у клиента, который не хозяин тела (пункт 6.2).
+ * Ragdoll of a hit zombie on a client that is not the body's owner (item 6.2).
  *
- * Полёт тела в сети не передаётся: каждый клиент, у которого машина рядом, сам считает удар и
- * сам запускает рэгдолл. Проверка двумя клиентами показала у того, кто смотрит, две беды.
+ * The body's flight is not networked: every client with the vehicle nearby computes the hit and
+ * starts the ragdoll on its own. A test with two clients showed two problems for the observer.
  *
- * <h2>1. Рывки</h2>
- * Хозяин зомби — водитель — пять раз в секунду шлёт позицию своего рэгдолла, а клиент
- * наблюдателя на каждое сообщение прокладывает к ней путь, поворачивает тело по её направлению
- * и телепортирует, если разошлось больше чем на 3 клетки ({@code NetworkZombieAI.parse}). Два
- * полёта не совпадают, и тело мечется между своим рэгдоллом и чужим: шаг следования у
- * наблюдателя 0.7–1.6 клетки за кадр против 0.1 у водителя. Теперь, пока у клиента идёт свой
- * рэгдолл, позиции хозяина к телу не применяются; потом — снова как в ванили.
+ * <h2>1. Jitter</h2>
+ * The zombie's owner, the driver, sends its ragdoll's position five times a second, and on every
+ * message the observer's client builds a path to it, turns the body to the direction it carries
+ * and teleports it if they diverge by more than 3 tiles ({@code NetworkZombieAI.parse}). The two
+ * flights do not match, and the body darts between its own ragdoll and the other one: the
+ * observer's follow step is 0.7–1.6 tiles per frame versus 0.1 for the driver. Now the owner's
+ * positions are not applied to the body while its local ragdoll runs; after that, as in vanilla.
  *
- * <h2>2. Вечный полёт</h2>
- * Пока тело касается машины, симуляция продлевается каждый кадр ({@code RagdollController}:
- * {@code isContactingVehicle → simulationTimeout = 1.5}), а касание машины с чужим водителем игра
- * не проверяет вовсе:
+ * <h2>2. Endless flight</h2>
+ * While the body touches a vehicle, simulation is extended each frame ({@code RagdollController}:
+ * {@code isContactingVehicle → simulationTimeout = 1.5}), but contact with a vehicle driven by
+ * someone else is not checked by the game at all:
  * <pre>
  * // BaseVehicle.isCollided
  * if (GameClient.client &amp;&amp; getDriver() != null &amp;&amp; !getDriver().isLocal()) return true;
  * </pre>
- * Рэгдолл наблюдателя не кончался, пока водитель за рулём, даже если машина уехала, и труп
- * приходил по пятисекундному таймауту — скачком. Теперь касание проверяется той же геометрией,
- * что для своей машины. {@code isCollided} зовёт только {@code RagdollController} — больше ничего
- * это не задевает.
+ * The observer's ragdoll did not end while the driver was at the wheel, even if the vehicle had
+ * left, and the corpse appeared on the five-second timeout, snapping into place. Now contact is
+ * checked with the same geometry as for a vehicle with a local driver. Only
+ * {@code RagdollController} calls {@code isCollided}, so nothing else is affected.
  *
- * <h2>Замер</h2>
- * Два полёта всё равно кончаются в разных точках, и тело у наблюдателя переносится к трупу,
- * который сервер положил по точке водителя: либо сообщением хозяина после приземления (больше
- * 3 клеток — телепорт), либо пакетом трупа (другая клетка — перенос). Оба переноса считаются.
+ * <h2>Measurement</h2>
+ * The two flights still end at different points, and the observer's body is moved to the corpse
+ * that the server placed at the driver's point: either by the owner's message after landing
+ * (over 3 tiles: teleport) or by the corpse packet (another square: move). Both moves are counted.
  */
 public final class RemoteRagdoll {
 
     public static final long REPORT_NANOS = 15_000_000_000L;
-    /** Дальше этого {@code NetworkZombieAI.parse} телепортирует, клеток. */
+    /** Beyond this distance, in tiles, {@code NetworkZombieAI.parse} teleports. */
     public static final float TELEPORT_DIST = 3.0f;
 
     public static volatile boolean broken = false;
 
-    // ---- рефлексия
+    // ---- reflection
     public static Field fClient;
     public static Field fNetZombie;
     public static Field fRealX;
@@ -62,7 +62,7 @@ public final class RemoteRagdoll {
     public static Method mPacketX;
     public static Method mPacketY;
 
-    // ---- счётчики для строки в логе
+    // ---- counters for the log line
     public static long heldBack = 0L;
     public static long contactReleased = 0L;
     public static long ownerSnaps = 0L;
@@ -113,9 +113,9 @@ public final class RemoteRagdoll {
     }
 
     /**
-     * Клиент, вход в {@code NetworkZombieAI.parse}: true — не применять сообщение хозяина, у нас
-     * идёт свой рэгдолл. Заодно замер: мёртвое тело после приземления, которое сообщение хозяина
-     * сейчас телепортирует к точке водителя.
+     * Client, entry to {@code NetworkZombieAI.parse}: true means do not apply the owner's
+     * message, our own ragdoll is running. Also measures: a dead body after landing that the
+     * owner's message is about to teleport to the driver's point.
      */
     public static boolean skipOwnerUpdate(Object networkAi, Object packet) {
         if (broken || networkAi == null) {
@@ -154,7 +154,7 @@ public final class RemoteRagdoll {
         }
     }
 
-    /** Клиент, выход из {@code BaseVehicle.isCollided}: машина с чужим водителем — честная проверка касания. */
+    /** Client, exit from {@code BaseVehicle.isCollided}: a real contact check when the driver is remote. */
     public static boolean contact(Object vehicle, Object character, boolean vanilla) {
         if (!vanilla || broken || vehicle == null || character == null) {
             return vanilla;
@@ -168,12 +168,12 @@ public final class RemoteRagdoll {
             }
             Object driver = mGetDriver.invoke(vehicle);
             if (driver == null || ((Boolean) mIsLocal.invoke(driver)).booleanValue()) {
-                return vanilla;     // свой водитель — ваниль уже проверила геометрией
+                return vanilla;     // local driver: vanilla has already checked the geometry
             }
             if (!enabled()) {
                 return vanilla;
             }
-            // Тот же тест и радиус, что у ванили для своего водителя.
+            // The same test and radius that vanilla uses for a local driver.
             Object v = mTestCollision.invoke(vehicle, character, Float.valueOf(0.20000002f), collisionOut);
             boolean touching = v != null && fVecX.getFloat(v) != -1.0f;
             if (!touching) {
@@ -187,7 +187,7 @@ public final class RemoteRagdoll {
         }
     }
 
-    /** Клиент, вход в {@code DeadCharacterPacket.processClient}: насколько тело переносится к трупу сервера. */
+    /** Client, entry to {@code DeadCharacterPacket.processClient}: the body's shift to the server's corpse. */
     public static void onCorpsePacket(Object packet) {
         if (broken || packet == null) {
             return;
@@ -208,7 +208,7 @@ public final class RemoteRagdoll {
             if (d > corpseMoveMax) {
                 corpseMoveMax = d;
             }
-            // processClient переносит тело, только если клетка другая.
+            // processClient moves the body only if the square is different.
             if ((int) Math.floor(px) != (int) Math.floor(cx) || (int) Math.floor(py) != (int) Math.floor(cy)) {
                 corpseMoved++;
             }
@@ -218,7 +218,7 @@ public final class RemoteRagdoll {
         }
     }
 
-    /** Сводка раз в 15 секунд, только если что-то происходило. */
+    /** A summary every 15 seconds, only if something happened. */
     public static void report() {
         long now = System.nanoTime();
         if (now - lastReportNanos < REPORT_NANOS) {

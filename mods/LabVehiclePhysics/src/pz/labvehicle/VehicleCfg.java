@@ -13,36 +13,36 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Таблица реальных масс машин и правил пересчёта остальных характеристик.
+ * Table of real vehicle masses and of rules for rescaling the other characteristics.
  *
- * Зачем файл, а не константы в коде. Машин в игре 280 штук (ваниль + моды), и ни одна
- * из них не весит столько, сколько должна: весь парк сжат в 650..1160 кг, а танк M60A3
- * из мода весит 1104 кг — ровно столько же, сколько ванильный пикап-фургон, потому что
- * моддер скопировал его шаблон и массу не тронул. Подбор правильных чисел — это работа
- * итерациями, и каждая итерация не должна стоить пересборки jar.
+ * Why a file and not constants in code. The game has 280 vehicles (vanilla + mods), and not one
+ * of them weighs what it should: the whole fleet is squeezed into 650..1160 kg, and the M60A3
+ * tank from a mod weighs 1104 kg, exactly as much as the vanilla pickup van, because the
+ * modder copied its template and left the mass alone. Finding the right numbers is iterative
+ * work, and no iteration should cost a jar rebuild.
  *
- * Формат строки:
+ * Line format:
  * <pre>
- *   &lt;маска имени&gt;: mass=&lt;кг&gt; [stiffness=auto|&lt;число&gt;] [engine=auto|keep|&lt;число&gt;]
- *                   [maxSpeed=&lt;число&gt;] [live]
+ *   &lt;name mask&gt;: mass=&lt;kg&gt; [stiffness=auto|&lt;number&gt;] [engine=auto|keep|&lt;number&gt;]
+ *                   [maxSpeed=&lt;number&gt;] [live]
  * </pre>
- * Маска — имя скрипта машины, допускается {@code *} в любом месте. Правила проверяются
- * сверху вниз, срабатывает первое подходящее.
+ * The mask is a vehicle script name, with {@code *} allowed anywhere. Rules are checked
+ * top to bottom; the first matching one applies.
  *
- * Значения:
+ * Values:
  * <ul>
- *   <li>{@code mass} — масса в килограммах. Игра хранит массу в тех же единицах
- *       (ванильная легковушка 800), так что пересчёт не нужен.</li>
- *   <li>{@code stiffness=auto} — жёсткость подвески умножается на то же отношение,
- *       что и масса. Это гипотеза, которую первая итерация как раз и проверяет:
- *       если Bullet внутри уже нормирует силу пружины на массу шасси, множить не надо.</li>
- *   <li>{@code engine=auto} — тяга умножается на то же отношение, то есть разгон
- *       остаётся прежним. {@code engine=keep} (по умолчанию) — тяга не трогается,
- *       и потяжелевшая машина разгоняется хуже, как в жизни.</li>
- *   <li>{@code live} — масса ещё и подменяется на лету в {@code getFudgedMass()},
- *       который игра отдаёт в Bullet каждый кадр. Файл перечитывается раз в две
- *       секунды, так что число можно крутить прямо во время игры, без перезапуска.
- *       Жёсткость подвески так не подкрутишь — она зашивается один раз при загрузке.</li>
+ *   <li>{@code mass}: mass in kilograms. The game stores mass in the same units
+ *       (the vanilla passenger car is 800), so no conversion is needed.</li>
+ *   <li>{@code stiffness=auto}: suspension stiffness is multiplied by the same ratio as the
+ *       mass. This is a hypothesis the first iteration is meant to test: if Bullet already
+ *       normalizes the spring force by chassis mass internally, there is no need to multiply.</li>
+ *   <li>{@code engine=auto}: thrust is multiplied by the same ratio, so acceleration
+ *       stays the same. {@code engine=keep} (the default): thrust is left alone,
+ *       and the heavier vehicle accelerates worse, as in real life.</li>
+ *   <li>{@code live}: the mass is also substituted on the fly in {@code getFudgedMass()},
+ *       which the game hands to Bullet every frame. The file is re-read every two
+ *       seconds, so the number can be tuned right during play, without a restart.
+ *       Suspension stiffness cannot be tuned this way: it is baked in once at load.</li>
  * </ul>
  */
 public final class VehicleCfg {
@@ -57,46 +57,46 @@ public final class VehicleCfg {
         public final String stiffness;
         public final String engine;
         public final float maxSpeed;
-        /** Ход подвески в сантиметрах. 0 = не трогать. */
+        /** Suspension travel in centimeters. 0 = leave as is. */
         public final float travel;
-        /** Длина пружины в покое. 0 = не трогать. */
+        /** Spring rest length. 0 = leave as is. */
         public final float rest;
-        /** Множитель тяги: число, "auto" (по отношению масс) или null. */
+        /** Thrust multiplier: a number, "auto" (by the mass ratio) or null. */
         public final String powerMul;
-        /** Множитель торможения: число, "auto" или null. */
+        /** Braking multiplier: a number, "auto" or null. */
         public final String brakeMul;
-        /** Множитель тяги на трогании (гидротрансформатор + понижающая). 0 = выключено. */
+        /** Thrust multiplier at pull-away (torque converter + low gear). 0 = off. */
         public final float lowGear;
-        /** Скорость в км/ч, на которой множитель сходит к единице. */
+        /** Speed in km/h at which the multiplier tapers down to one. */
         public final float lowGearTo;
-        /** Разовая починка и заправка при перечитывании конфига. */
+        /** One-off repair and refuel when the config is re-read. */
         public final boolean service;
-        /** Объём топливного бака в литрах. 0 = не трогать. */
+        /** Fuel tank capacity in liters. 0 = leave as is. */
         public final float tank;
         /**
-         * Отношение новой массы к ванильной — запасной путь для {@code auto}.
+         * Ratio of the new mass to the vanilla one: the fallback path for {@code auto}.
          *
-         * Считать его следует через {@link VehicleCfg#autoRatio}, который берёт
-         * ванильную массу из {@link VehicleCfg#VANILLA}. Это поле остаётся
-         * на случай, когда имя скрипта до расчёта не дошло.
+         * It should be computed through {@link VehicleCfg#autoRatio}, which takes the
+         * vanilla mass from {@link VehicleCfg#VANILLA}. This field remains for the
+         * case when the script name never made it to the calculation.
          */
         public volatile float ratio = 1.0f;
         public final boolean live;
         /**
-         * Паспортная мощность в л.с., 0 = не задана. В множитель тяги переводится
-         * при использовании, см. {@link VehicleCfg#powerMultiplier}: для этого нужна
-         * ванильная тяга конкретного скрипта, а на момент разбора её не видно.
+         * Rated power in hp, 0 = not set. It is converted into a thrust multiplier
+         * at use time, see {@link VehicleCfg#powerMultiplier}: that needs the vanilla
+         * thrust of the specific script, which is not visible at parse time.
          */
         public final float powerHp;
-        /** lowGearTo как задан, без подстановки 30 по умолчанию: нужен для слияния слоёв. */
+        /** lowGearTo as given, without the default of 30 filled in: needed for merging layers. */
         public final float lowGearToRaw;
-        /** Категория техники от автора мода. Пока только показывается в аудите. */
+        /** Vehicle category from the mod author. For now only shown in the audit. */
         public final String category;
-        /** Откуда правило: "cfg", "author:&lt;мод&gt;" или слияние обоих. */
+        /** Where the rule comes from: "cfg", "author:&lt;mod&gt;" or a merge of both. */
         public final String source;
         /**
-         * Имя пресета ({@code preset=tank}) или null. Раскрывается при разрешении слоёв
-         * ({@link VehicleCfg#withPreset}): поля строки поверх полей пресета.
+         * Preset name ({@code preset=tank}) or null. Expanded when the layers are resolved
+         * ({@link VehicleCfg#withPreset}): the line's fields go on top of the preset's fields.
          */
         public String preset;
         public int matched;
@@ -138,35 +138,35 @@ public final class VehicleCfg {
             return name != null && this.pattern.matcher(name).matches();
         }
 
-        /** Задаёт ли правило тягу хоть в каком-то виде. */
+        /** Whether the rule sets thrust in any form at all. */
         public boolean hasPower() {
             return powerMul != null || powerHp > 0.0f;
         }
 
         /**
-         * Слияние двух слоёв: верхний поверх нижнего. Цепочка такая: автор мода поверх
-         * встроенных данных, игрок поверх того, что вышло (vehicle-data-design.md).
+         * Merge of two layers: the upper one over the lower one. The chain is: mod author over
+         * the built-in data, player over whatever came out of that (vehicle-data-design.md).
          *
-         * Поле берётся у верхнего слоя, если он его задал, иначе у нижнего. Так игрок
-         * может поправить одну массу и оставить остальное автору и справочнику.
+         * Each field comes from the upper layer if set there, else from the lower one. The player
+         * can thus fix just the mass and leave the rest to the author and the reference data.
          *
-         * Два поля сливаются ПАРАМИ, а не по отдельности:
+         * Two settings merge IN PAIRS rather than field by field:
          * <ul>
-         *   <li>тяга — {@code powerMul} и {@code power}. Иначе вышло бы, что игрок задал
-         *       мощность в л.с., а победил авторский множитель, потому что множитель
-         *       проверяется первым. Кто задал тягу хоть как-то — тот и владеет парой;</li>
-         *   <li>понижающая — {@code lowGear} и {@code lowGearTo}: скорость схода без
-         *       своего множителя смысла не имеет.</li>
+         *   <li>thrust: {@code powerMul} and {@code power}. Otherwise the player could set
+         *       power in hp and still lose to the author's multiplier, because the multiplier
+         *       is checked first. Whoever sets thrust in any form owns the pair;</li>
+         *   <li>low gear: {@code lowGear} and {@code lowGearTo}. The taper speed makes no
+         *       sense without its own multiplier.</li>
          * </ul>
          *
-         * {@code live} и {@code service} — инструменты лаборатории. Их задаёт только игрок,
-         * у автора и у встроенных данных их нет; объединяются через «или».
+         * {@code live} and {@code service} are lab tools. Only the player sets them; the author
+         * and the built-in data do not have them. They are combined with "or".
          */
         public static Rule merge(Rule top, Rule base) {
             return merge(top, base, base.glob);
         }
 
-        /** @param glob маска итогового правила — для строки в логе, на выбор правила она уже не влияет. */
+        /** @param glob mask of the resulting rule, for the log line; it no longer affects rule choice. */
         public static Rule merge(Rule top, Rule base, String glob) {
             boolean topPower = top.hasPower();
             boolean topLowGear = top.lowGear > 0.0f;
@@ -193,68 +193,68 @@ public final class VehicleCfg {
 
     public static volatile boolean broken = false;
     public static File file;
-    /** volatile: обнуляется из Lua, когда пришла таблица сервера, — чтобы подхватить сразу. */
+    /** volatile: zeroed from Lua when the server table arrives, so it is picked up at once. */
     public static volatile long lastCheckNanos = 0L;
     public static long lastModified = -1L;
     /**
-     * Верхний слой правил: файл игрока, а у клиента в сети — таблица сервера
-     * ({@link ServerTable}). Остальной код разницы не видит.
+     * Upper rule layer: the player's file, or the server table on a multiplayer client
+     * ({@link ServerTable}). The rest of the code does not see the difference.
      */
     public static List<Rule> rules = new ArrayList<Rule>();
-    /** Клиент в сети: свой файл не читаем, верхний слой — таблица сервера. */
+    /** Multiplayer client: our own file is not read, the upper layer is the server table. */
     public static volatile boolean mpMode = false;
-    /** Какое поколение таблицы сервера уже подхвачено. */
+    /** Which generation of the server table has already been picked up. */
     public static int seenServerGeneration = -1;
-    /** Строки файла игрока без пустых и комментариев — их сервер рассылает клиентам. */
+    /** Lines of the player's file minus blanks and comments: the server sends these to clients. */
     public static volatile List<String> playerLines = new ArrayList<String>();
     public static volatile boolean playerFilePresent = false;
-    /** Растёт при каждом перечитывании файла игрока: по нему сервер видит, что пора разослать заново. */
+    /** Grows on every re-read of the player's file: this tells the server it is time to resend. */
     public static volatile int playerStamp = 0;
-    /** Почему скрипты переприменяются — для строки в логе. */
+    /** Why the scripts are being re-applied, for the log line. */
     public static volatile String reapplyReason = "";
     public static final Map<String, Field> FIELDS = new HashMap<String, Field>();
     public static Method mGetName;
     public static boolean summaryPrinted = false;
-    /** Сколько скриптов реально переписано. 0 через несколько секунд = патчер не зацепил класс. */
+    /** Count of scripts actually rewritten. 0 after a few seconds = patcher missed the class. */
     public static volatile int appliedCount = 0;
     public static volatile boolean fallbackDone = false;
     public static long firstSeenNanos = 0L;
-    /** Есть ли хоть одно правило с {@code live}. Пока нет — живая подмена не стоит ничего. */
+    /** Whether any rule has {@code live}. Until one does, live substitution costs nothing. */
     public static volatile boolean hasLive = false;
-    /** Есть ли правила, меняющие тягу или тормоза. Пока нет — патч тяги ничего не стоит. */
+    /** Whether any rules change thrust or brakes. Until then, the thrust patch costs nothing. */
     public static volatile boolean hasTuning = false;
-    /** Есть ли правила с разовой починкой. */
+    /** Whether any rules have a one-off repair. */
     public static volatile boolean hasService = false;
-    /** Есть ли правила, меняющие объём бака. */
+    /** Whether any rules change the tank capacity. */
     public static volatile boolean hasTank = false;
-    /** Самый большой объём бака из правил — до него поднимается обрезка у предметов. */
+    /** The largest tank capacity among the rules: the clamp on tank items is raised up to it. */
     public static volatile int largestTank = 0;
-    /** Растёт при каждом перечитывании файла: по нему сбрасываются кэши потребителей. */
+    /** Grows on every file re-read: consumers reset their caches by it. */
     public static volatile int generation = 0;
 
     /**
-     * Ванильные массы скриптов, запомненные ДО первой перезаписи. Ключ — имя скрипта.
+     * Vanilla script masses, remembered BEFORE the first overwrite. Key: the script name.
      *
-     * <h2>Зачем понадобилось</h2>
-     * {@code brakeMul=auto} означает «отмасштабировать тормоз так же, как массу», то есть
-     * умножить на отношение новой массы к ванильной. Раньше это отношение считалось так:
+     * <h2>Why this was needed</h2>
+     * {@code brakeMul=auto} means "scale the brake the same way as the mass", i.e.
+     * multiply by the ratio of the new mass to the vanilla one. It used to be computed like this:
      * <pre>
      * float oldMass = fMass.getFloat(script);
      * float k = rule.mass / oldMass;
      * rule.ratio = k;
-     * fMass.setFloat(script, rule.mass);   // и тут же затираем то, из чего считали
+     * fMass.setFloat(script, rule.mass);   // and at once overwrite what k was computed from
      * </pre>
-     * Первый проход давал правду. Но {@code applyToScript} зовётся заново при каждом
-     * перечитывании конфига, а там {@code oldMass} — уже НАША масса, и выходит
-     * {@code 12300/12300 = 1.0}. Плюс если до скрипта дело вообще не дошло, {@code ratio}
-     * так и оставался своим значением по умолчанию, а оно тоже 1.0. Обе дороги вели
-     * в единицу, и {@code auto} не работал никак.
+     * The first pass got it right. But {@code applyToScript} is called again on every
+     * config re-read, and there {@code oldMass} is already OUR mass, which gives
+     * {@code 12300/12300 = 1.0}. On top of that, if the script was never reached at all,
+     * {@code ratio} just kept its default value, which is also 1.0. Both paths led
+     * to 1.0, and {@code auto} could not work either way.
      *
-     * Карта живёт всю сессию и НЕ чистится при перечитывании файла — иначе вернулись бы
-     * ровно к той же ошибке. Запись по принципу «кто первый, тот и прав».
+     * The map lives for the whole session and is NOT cleared when the file is re-read; otherwise
+     * we would be back to exactly the same bug. Writes follow the "first one wins" rule.
      *
-     * Тот же класс ошибки, что и с {@code hasLive}: величина считалась из того, что мы
-     * сами через строку затираем. Разбор — в {@code modding-notes.md} §12.
+     * The same class of bug as with {@code hasLive}: a value was computed from something we
+     * ourselves overwrite one line later. Analysis: {@code modding-notes.md} §12.
      */
     public static final Map<String, Float> VANILLA =
             java.util.Collections.synchronizedMap(new HashMap<String, Float>());
@@ -263,12 +263,12 @@ public final class VehicleCfg {
     }
 
     /**
-     * Ключ карты ванильных значений: имя скрипта плюс имя поля.
+     * Key of the vanilla value map: script name plus field name.
      *
-     * Префикс модуля срезаем намеренно. Игра отдаёт имя в двух видах: у объекта скрипта
-     * {@code getName()} это {@code "M113_APC"}, а у машины {@code getScriptName()} —
-     * {@code "Base.M113_APC"}. Кладёт в карту одно место, читает другое, и без
-     * нормализации они бы промахивались мимо друг друга.
+     * The module prefix is stripped on purpose. The game gives the name in two forms: the script
+     * object's {@code getName()} is {@code "M113_APC"}, the vehicle's {@code getScriptName()} is
+     * {@code "Base.M113_APC"}. One place writes to the map, another reads from it, and without
+     * normalization they would miss each other.
      */
     public static String vanillaKey(String name, String field) {
         String bare = name;
@@ -279,16 +279,16 @@ public final class VehicleCfg {
         return bare + "|" + field;
     }
 
-    /** Кэш рефлексии для {@link #noteVanillaMassFromVehicle}. */
+    /** Reflection cache for {@link #noteVanillaMassFromVehicle}. */
     public static Method mVehicleGetScript;
 
     /**
-     * Подсмотреть ванильную массу через скрипт машины, пока её никто не перезаписал.
+     * Peek at the vanilla mass through the vehicle's script before anyone overwrites it.
      *
-     * Нужно на случай, когда {@code applyToScript} для этого скрипта не отработал:
-     * тогда в поле скрипта всё ещё ванильное число, и это последний момент, когда
-     * его видно. Если применение уже было, ключ в карте есть и мы выходим сразу —
-     * запись работает по принципу «кто первый, тот и прав».
+     * Needed for the case when {@code applyToScript} has not run for this script:
+     * then the script field still holds the vanilla number, and this is the last moment
+     * it can be seen. If it was already applied, the key is in the map and we return at once:
+     * writes follow the "first one wins" rule.
      */
     public static void noteVanillaMassFromVehicle(Object vehicle, String name) {
         if (vehicle == null || name == null) {
@@ -307,13 +307,13 @@ public final class VehicleCfg {
             Object script = mVehicleGetScript.invoke(vehicle);
             noteVanillaFromScript(script, name);
         } catch (Throwable ignored) {
-            // не смогли — auto и power просто откатятся на единицу, это безопасно
+            // failed: auto and power simply fall back to one, which is safe
         }
     }
 
     /**
-     * Запомнить ванильные массу и тягу скрипта. Тяга нужна ключу {@code power}:
-     * паспортные л.с. переводятся в множитель относительно ванильной тяги скрипта.
+     * Remember the script's vanilla mass and thrust. The {@code power} key needs the thrust:
+     * rated hp are converted into a multiplier relative to the script's vanilla thrust.
      */
     public static void noteVanillaFromScript(Object script, String name) throws Exception {
         if (script == null || name == null) {
@@ -324,7 +324,7 @@ public final class VehicleCfg {
         rememberVanilla(name, "engineForce", field(cls, "engineForce").getFloat(script));
     }
 
-    /** Запомненное ванильное значение поля, 0 если ещё не видели. */
+    /** Remembered vanilla value of a field, 0 if not seen yet. */
     public static float vanillaValue(String name, String fieldName) {
         if (name == null) {
             return 0.0f;
@@ -336,23 +336,23 @@ public final class VehicleCfg {
     }
 
     /**
-     * Сколько игровой тяги соответствует одной лошадиной силе.
+     * How much in-game thrust corresponds to one horsepower.
      *
-     * Выводится из ванильной легковушки: у неё 4000 единиц тяги на 800 кг, то есть 5.00
-     * на кг, при настоящем седане 140 л.с. на 1350 кг. Нужная тяга для любой машины:
+     * Derived from the vanilla passenger car: it has 4000 units of thrust for 800 kg, i.e. 5.00
+     * per kg, against 140 hp for 1350 kg in a real sedan. Required thrust for any vehicle:
      * <pre>
-     *   5.00 x [(л.с./кг) / (140/1350)] x кг  =  5.00 x 1350/140 x л.с.  =  48.2 x л.с.
+     *   5.00 x [(hp/kg) / (140/1350)] x kg  =  5.00 x 1350/140 x hp  =  48.2 x hp
      * </pre>
-     * Масса сокращается — тяга в игре должна быть просто пропорциональна мощности.
+     * The mass cancels out: in-game thrust should simply be proportional to power.
      */
     public static final float FORCE_PER_HP = 5.0f * 1350.0f / 140.0f;
 
     /**
-     * Множитель тяги, в каком бы виде она ни была задана.
+     * Thrust multiplier, in whatever form thrust was specified.
      *
-     * {@code powerMul} — число или auto — главнее: это ручная настройка. Иначе
-     * {@code power} в л.с. переводится относительно ванильной тяги скрипта. Пока та
-     * не известна, возвращаем единицу: не трогать безопаснее, чем умножить наугад.
+     * {@code powerMul} (a number or auto) takes precedence: it is the manual setting. Otherwise
+     * {@code power} in hp is converted relative to the script's vanilla thrust. While that is
+     * not known yet, we return one: leaving things alone is safer than multiplying at random.
      */
     public static float powerMultiplier(Rule rule, String scriptName) {
         if (rule == null) {
@@ -371,18 +371,18 @@ public final class VehicleCfg {
     }
 
     /**
-     * Запомнить ванильное значение поля скрипта, если оно ещё не известно.
+     * Remember the vanilla value of a script field if it is not known yet.
      *
-     * Касается не только массы: {@code stiffness=auto} и {@code engine=auto} тоже
-     * умножают на {@code k}, и если считать их от уже изменённого значения, они пойдут
-     * вразнос — 35 -> 224 -> 1434 при каждом перечитывании файла. Раньше это не
-     * вылезало только потому, что {@code k} был сломан и равнялся единице: одна ошибка
-     * прикрывала другую.
+     * This is not only about mass: {@code stiffness=auto} and {@code engine=auto} also
+     * multiply by {@code k}, and if computed from an already changed value they run
+     * away: 35 -> 224 -> 1434 on every file re-read. This only stayed hidden before
+     * because {@code k} was broken and equal to one: one bug covered for
+     * the other.
      *
-     * @param current значение, которое видно сейчас. Вызывающий обязан передавать его
-     *                ДО собственной перезаписи; если запись уже была, вернётся
-     *                запомненное ранее, а не подсунутое.
-     * @return ванильное значение, 0 если ничего осмысленного не передали
+     * @param current the value visible right now. The caller must pass it
+     *                BEFORE its own overwrite; if a value was already recorded, the one
+     *                remembered earlier is returned, not the one passed in.
+     * @return the vanilla value, 0 if nothing meaningful was passed
      */
     public static float rememberVanilla(String name, String field, float current) {
         if (name == null) {
@@ -402,20 +402,20 @@ public final class VehicleCfg {
         return 0.0f;
     }
 
-    /** Поля скрипта, которые пишет {@link #applyToScript}. */
+    /** Script fields that {@link #applyToScript} writes. */
     public static final String[] SCRIPT_FIELDS = {
         "mass", "suspensionStiffness", "engineForce", "maxSpeed", "maxSuspensionTravelCm", "suspensionRestLength",
     };
     /**
-     * Исходные числа полей {@link #SCRIPT_FIELDS} по голому имени скрипта, какие бы они ни были,
-     * хоть нулевые. Нужны, чтобы вернуть скрипт к игре, когда правило пропало. Запись по принципу
-     * «кто первый, тот и прав»: первый раз мы видим скрипт до собственной записи.
+     * Original values of the {@link #SCRIPT_FIELDS} fields by bare script name, whatever they
+     * are, even zero. Needed to return a script to the game's values when its rule is gone. Writes
+     * follow the "first one wins" rule: the first time we see a script is before our own write.
      */
     public static final Map<String, float[]> ORIGINAL_FIELDS = new java.util.concurrent.ConcurrentHashMap<String, float[]>();
-    /** Голые имена скриптов, в которые мы писали. */
+    /** Bare names of the scripts we have written to. */
     public static final java.util.Set<String> WRITTEN =
             java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
-    /** Сколько скриптов возвращено к числам игры — для строки в логе. */
+    /** How many scripts were returned to the game's values, for the log line. */
     public static volatile int restoredCount = 0;
 
     public static float[] rememberOriginalFields(Object script, String name) throws Exception {
@@ -441,8 +441,8 @@ public final class VehicleCfg {
     }
 
     /**
-     * Масса скрипта, какой её задала игра или автор мода, — до нашего справочника. Для расхода
-     * топлива «как в игре» ({@code LabVehicleFuel.lua}). 0 — скрипт ещё не видели.
+     * Script mass as the game or the mod author set it, before our reference data. Used for
+     * "as in vanilla" fuel consumption ({@code LabVehicleFuel.lua}). 0: script not seen yet.
      */
     public static float originalMass(String name) {
         float[] o = name != null ? ORIGINAL_FIELDS.get(bareName(name)) : null;
@@ -453,11 +453,11 @@ public final class VehicleCfg {
     }
 
     /**
-     * Отношение новой массы к ванильной для {@code auto}.
+     * Ratio of the new mass to the vanilla one, for {@code auto}.
      *
-     * Если ванильная масса скрипта ещё не запомнена, откатываемся на {@code rule.ratio}
-     * и дальше на единицу — то есть на «ничего не меняем», что всегда безопаснее,
-     * чем умножить на случайное число.
+     * If the script's vanilla mass is not remembered yet, fall back to {@code rule.ratio}
+     * and then to one, i.e. to "change nothing", which is always safer
+     * than multiplying by a random number.
      */
     public static float autoRatio(Rule rule, String scriptName) {
         if (rule == null || rule.mass <= 0.0f) {
@@ -493,7 +493,7 @@ public final class VehicleCfg {
         return sb.append("\\z").toString();
     }
 
-    /** Путь к файлу: рядом с сейвами лаборатории, чтобы правился без прав админа. */
+    /** File path: next to the lab's saves, so that it can be edited without admin rights. */
     public static File resolveFile() {
         if (file == null) {
             String home = System.getProperty("user.home");
@@ -503,16 +503,16 @@ public final class VehicleCfg {
     }
 
     /**
-     * Встроенные данные — слой 3 (vehicle-data-design.md): паспорта машин, которые
-     * мод везёт с собой. Файл лежит внутри мода, рядом с jar, в том же формате, что
-     * и конфиг игрока, с масками.
+     * Built-in data, layer 3 (vehicle-data-design.md): the vehicle specs that the mod
+     * ships with. The file sits inside the mod, next to the jar, in the same format as
+     * the player's config, with masks.
      *
-     * Зачем. До 26.09.2026 все паспорта лежали в vehicle-physics.cfg в папке Zomboid
-     * игрока. У человека, который скачает мод, этого файла нет — у него была бы
-     * ванильная физика. А в мультиплеере физику машины считает клиент водителя
-     * (сервер машины в Bullet вообще не регистрирует: VehicleScript.Loaded() зовёт
-     * toBullet() только при !GameServer.server), так что гость без файла ездил бы
-     * на ванили даже на сервере с модом.
+     * Why. Until 26.09.2026 all specs lived in vehicle-physics.cfg in the player's Zomboid
+     * folder. Someone who downloads the mod does not have that file, so they would get
+     * vanilla physics. And in multiplayer the vehicle physics is computed by the driver's client
+     * (the server does not register vehicles in Bullet at all: VehicleScript.Loaded() calls
+     * toBullet() only when !GameServer.server), so a guest without the file would drive
+     * with vanilla values even on a server running the mod.
      */
     public static final String DEFAULTS_NAME = "vehicle-physics-defaults.cfg";
     public static File defaultsFile;
@@ -523,7 +523,7 @@ public final class VehicleCfg {
         if (defaultsFile != null) {
             return defaultsFile;
         }
-        // jar лежит в <мод>/42/media/java/, файл — в <мод>/42/media/
+        // the jar lives in <mod>/42/media/java/, the file in <mod>/42/media/
         try {
             java.security.CodeSource cs = VehicleCfg.class.getProtectionDomain().getCodeSource();
             if (cs != null && cs.getLocation() != null) {
@@ -537,7 +537,7 @@ public final class VehicleCfg {
             }
         } catch (Throwable ignored) {
         }
-        // Запасной путь — папка мода по его id.
+        // Fallback: the mod folder by its id.
         try {
             Class<?> zfs = Class.forName("zombie.ZomboidFileSystem");
             Object inst = zfs.getField("instance").get(null);
@@ -565,18 +565,18 @@ public final class VehicleCfg {
     public static boolean defaultsMissingLogged = false;
 
     /**
-     * Пресеты по типу техники: танк, броневик, легковая, прицеп и т.д. Готовые наборы для
-     * машин, о которых мод ничего не знает. Игрок выбирает пресет ключом {@code preset=}
-     * в своей строке, поля строки главнее полей пресета ({@link #withPreset}).
+     * Presets by vehicle type: tank, armored car, passenger car, trailer, etc. Ready-made sets for
+     * vehicles the mod knows nothing about. The player picks a preset with the {@code preset=} key
+     * in their line; the line's fields take precedence over the preset's ({@link #withPreset}).
      */
     public static final String PRESETS_NAME = "vehicle-physics-presets.cfg";
     public static long presetsModified = -1L;
-    /** Имя пресета в нижнем регистре -> правило. Заменяется целиком при перечитывании. */
+    /** Lower-case preset name -> rule. Replaced as a whole on re-read. */
     public static volatile Map<String, Rule> presets = new HashMap<String, Rule>();
     public static final java.util.Set<String> WARNED =
             java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
 
-    /** Раскрыть ссылку на пресет: поля строки поверх полей пресета. Без ссылки — как есть. */
+    /** Expand a preset reference: line fields over preset fields. No reference: returned as is. */
     public static Rule withPreset(Rule rule) {
         if (rule == null || rule.preset == null) {
             return rule;
@@ -593,16 +593,16 @@ public final class VehicleCfg {
     }
 
     /**
-     * Перечитывает источники, если они изменились. Проверка не чаще раза в две секунды.
+     * Re-reads the sources if they have changed. Checks at most once every two seconds.
      *
-     * Верхний слой берётся из одного из двух мест: в одиночной игре и на сервере — файл
-     * игрока, у клиента в сети — таблица сервера ({@link ServerTable}). Свой файл клиент
-     * в сети не читает совсем: иначе одна машина весила бы по-разному у разных игроков.
+     * The upper layer comes from one of two places: the player's file in singleplayer and on the
+     * server, the server table ({@link ServerTable}) on a multiplayer client. A multiplayer client
+     * never reads its own file, or the same vehicle would weigh differently for different players.
      */
     public static void reloadIfNeeded() {
-        // Режим смотрим на каждом вызове, в обход двухсекундной паузы: скрипты машин
-        // грузятся пачкой за доли секунды сразу после подключения, и все они должны
-        // увидеть, что мы уже в сети, а не только те, что придут через две секунды.
+        // The mode is checked on every call, bypassing the two-second pause: vehicle scripts
+        // load in a batch within a fraction of a second right after connecting, and all of them
+        // must see that we are already in multiplayer, not just those that come two seconds later.
         boolean mp = ServerTable.isMpClient();
         boolean modeChanged = mp != mpMode;
         long now = System.nanoTime();
@@ -621,7 +621,7 @@ public final class VehicleCfg {
                         + " is not used on a server - waiting for the server's table,"
                         + " built-in and mod author data apply meanwhile");
             } else {
-                lastModified = -1L;      // вернулись в одиночную игру — перечитать свой файл
+                lastModified = -1L;      // back in singleplayer: re-read our own file
             }
         }
         if (!mpMode) {
@@ -638,16 +638,16 @@ public final class VehicleCfg {
         } else {
             int g = ServerTable.generation();
             if (modeChanged || g != seenServerGeneration) {
-                // При входе в сеть скрипты ещё только будут грузиться — переприменять
-                // нечего. А вот таблица, пришедшая в игре, требует переприменения.
+                // On joining a multiplayer game the scripts have yet to load, so there is nothing
+                // to re-apply. A table that arrives during play, however, needs a re-apply.
                 serverChanged = !modeChanged;
                 seenServerGeneration = g;
                 rules = ServerTable.rules;
                 fileChanged = true;
             }
         }
-        // Встроенные данные мода тоже перечитываем по дате: в лаборатории их удобно
-        // править на ходу, а у игрока файл просто не меняется, и проверка ничего не стоит.
+        // The mod's built-in data is also re-read by date: in the lab it is handy to edit it
+        // on the fly, and for a player the file simply never changes, so the check costs nothing.
         File df = resolveDefaultsFile();
         long dmod = (df != null && df.exists()) ? df.lastModified() : 0L;
         if (dmod != defaultsModified) {
@@ -656,7 +656,7 @@ public final class VehicleCfg {
             fileChanged = true;
             Log.debug("[LabVehiclePhysics] built-in vehicle data: rules loaded " + defaults.size());
         }
-        // Пресеты по типу техники лежат рядом со справочником и перечитываются так же.
+        // Presets by vehicle type sit next to the reference data and are re-read the same way.
         File pf = df != null ? new File(df.getParentFile(), PRESETS_NAME) : null;
         long pmod = (pf != null && pf.exists()) ? pf.lastModified() : 0L;
         if (pmod != presetsModified) {
@@ -674,20 +674,20 @@ public final class VehicleCfg {
                     + (loaded.isEmpty() ? " (" + PRESETS_NAME + " not found next to the built-in data)"
                                         : " - " + String.join(", ", loaded.keySet())));
         }
-        // Данные авторов модов живут в Lua и могут появиться позже файла: Lua-файлы
-        // модов грузятся своим порядком, а скрипты машин — своим. Поэтому таблицу
-        // смотрим на той же двухсекундной частоте, а не один раз при старте.
+        // Mod authors' data lives in Lua and may show up later than the file: mod Lua files
+        // load in their own order, and vehicle scripts in theirs. So the table is checked
+        // at the same two-second rate rather than once at startup.
         boolean authorsChanged = LuaRegistry.refresh();
-        // Переключатель «Ванильные машины» в песочнице включает и выключает встроенный
-        // справочник для ванильных скриптов — та же смена слоя, что и новые данные авторов.
-        // Значения мира приходят позже загрузки скриптов (из сейва или от сервера), поэтому
-        // смену ловим здесь, а не при загрузке.
+        // The "Vanilla vehicles" sandbox switch turns the built-in reference data on and off
+        // for vanilla scripts: the same kind of layer change as new author data.
+        // World values arrive later than the scripts load (from the save or from the server), so
+        // the change is caught here and not at load time.
         boolean custom = LabSettings.vanillaCustom();
         boolean vanillaChanged = custom != useBuiltinForVanilla;
         if (vanillaChanged) {
             useBuiltinForVanilla = custom;
         }
-        // Таблица машин из песочницы — верхний слой; приходит так же поздно, как переключатель.
+        // The sandbox vehicle table is the top layer; it arrives as late as the switch does.
         String table = LabSettings.vehicleTable();
         boolean tableChanged = !table.equals(appliedTable);
         if (tableChanged) {
@@ -707,10 +707,10 @@ public final class VehicleCfg {
                     + " of " + f.getAbsolutePath() + (hasLive ? ", live tuning active" : ""));
         }
         if (authorsChanged || serverChanged || vanillaChanged || tableChanged) {
-            // Скрипты могли загрузиться раньше, чем пришли данные авторов или таблица
-            // сервера, и тогда числа до скрипта не дошли. Переприменять прямо здесь нельзя:
-            // метод зовётся из патчей в любом контексте, в том числе посреди физики.
-            // Ставим флажок — отработает BaseVehicle.update, это главный поток.
+            // The scripts may have loaded before the author data or the server table arrived,
+            // and then the numbers never reached them. Re-applying right here is not allowed:
+            // this method is called from patches in any context, including mid-physics.
+            // So we set a flag, and BaseVehicle.update handles it on the main thread.
             List<String> why = new ArrayList<String>();
             if (authorsChanged) {
                 why.add("author data changed");
@@ -730,22 +730,22 @@ public final class VehicleCfg {
     }
 
     /**
-     * Действует ли встроенный справочник на ванильные машины — значение переключателя
-     * песочницы, принятое в {@link #reloadIfNeeded}. Читается в {@link #resolve}: там нужно
-     * то значение, под которое сброшен кэш правил, а не свежее.
+     * Whether the built-in reference data applies to vanilla vehicles: the value of the sandbox
+     * switch as accepted in {@link #reloadIfNeeded}. Read in {@link #resolve}, which needs
+     * the value the rule cache was reset for, not the freshest one.
      */
     public static volatile boolean useBuiltinForVanilla = true;
 
-    /** Голое имя скрипта -> ванильный ли он. Происхождение скрипта за сессию не меняется. */
+    /** Bare script name -> vanilla or not. A script's origin does not change within a session. */
     public static final Map<String, Boolean> VANILLA_SCRIPTS = new java.util.concurrent.ConcurrentHashMap<String, Boolean>();
     public static Object scriptManager;
     public static Method mSmGetVehicle;
     public static Method mLoadedBodies;
 
     /**
-     * Ванильная ли машина. Скрипт помнит, откуда пришло каждое его тело: пары «id мода, текст»
-     * в {@code getLoadedScriptBodies()}, у файлов самой игры id — {@code pz-vanilla}. Ванильная —
-     * та, что впервые описана игрой; мод, дописавший к ней что-то, её такой и оставляет.
+     * Whether the vehicle is vanilla. A script remembers where each of its bodies came from, as
+     * "mod id, text" pairs in {@code getLoadedScriptBodies()}; the game's own files have the id
+     * {@code pz-vanilla}. Vanilla means first defined by the game; a mod adding to it keeps it so.
      */
     public static boolean isVanillaScript(String name) {
         if (name == null) {
@@ -764,7 +764,7 @@ public final class VehicleCfg {
             }
             Object script = mSmGetVehicle.invoke(scriptManager, name);
             if (script == null) {
-                return false;      // скрипт ещё не загружен — не кэшируем, спросим позже
+                return false;      // script not loaded yet: do not cache, ask again later
             }
             return noteScriptOrigin(script, name);
         } catch (Throwable t) {
@@ -772,7 +772,7 @@ public final class VehicleCfg {
         }
     }
 
-    /** Запомнить происхождение скрипта, пока он в руках. @return ванильный ли он */
+    /** Remember the script's origin while we have it in hand. @return whether it is vanilla */
     public static boolean noteScriptOrigin(Object script, String name) {
         boolean vanilla = false;
         try {
@@ -783,18 +783,18 @@ public final class VehicleCfg {
             vanilla = bodies instanceof List && !((List<?>) bodies).isEmpty()
                     && "pz-vanilla".equals(((List<?>) bodies).get(0));
         } catch (Throwable ignored) {
-            // не смогли — считаем модовой: справочник к ней применится, как и раньше
+            // failed: treat it as modded, so the reference data applies to it as before
         }
         VANILLA_SCRIPTS.put(bareName(name), Boolean.valueOf(vanilla));
         return vanilla;
     }
 
     /**
-     * Флаги-выключатели для патчей, по обоим источникам сразу.
+     * On/off flags for the patches, computed over both sources at once.
      *
-     * Раньше считались только по файлу. С данными авторов это дало бы тихий отказ:
-     * мод регистрирует бак на 659 литров, а {@code hasTank} остаётся false, и патч
-     * бака даже не смотрит в сторону этой машины.
+     * They used to be computed from the file only. With author data that would be a silent
+     * failure: a mod registers a 659-liter tank, but {@code hasTank} stays false, and the tank
+     * patch does not even look in that vehicle's direction.
      */
     public static void recomputeFlags() {
         boolean live = false;
@@ -806,7 +806,7 @@ public final class VehicleCfg {
         all.addAll(defaults);
         all.addAll(LuaRegistry.entries.values());
         all.addAll(sandboxRules);
-        // Пресеты, на которые ссылаются правила: их тяга и бак тоже должны включить патчи.
+        // Presets referenced by rules: their thrust and tank must switch the patches on too.
         int own = all.size();
         for (int i = 0; i < own; i++) {
             String id = all.get(i).preset;
@@ -832,16 +832,16 @@ public final class VehicleCfg {
         largestTank = Math.round(biggest);
     }
 
-    /** Кэш слитых правил по имени скрипта. {@link #NONE} — правила нет. Чистится вместе с generation. */
+    /** Merged-rule cache by script name. {@link #NONE}: no rule. Cleared when generation changes. */
     public static final Map<String, Object> MERGED = new java.util.concurrent.ConcurrentHashMap<String, Object>();
     public static final Object NONE = new Object();
-    /** Данные авторов или таблица сервера изменились, скрипты надо переприменить из главного потока. */
+    /** Author data or the server table changed; the scripts must be re-applied from the main thread. */
     public static volatile boolean reapplyPending = false;
 
     /**
-     * Переприменить скрипты после того, как появились или изменились данные авторов
-     * или пришла таблица сервера. Зовётся из {@code BaseVehicle.update} — главный поток,
-     * безопасно звать toBullet().
+     * Re-apply the scripts after author data appeared or changed, or the server table
+     * arrived. Called from {@code BaseVehicle.update}: the main thread, where calling
+     * toBullet() is safe.
      */
     public static void reapplyIfPending() {
         if (!reapplyPending) {
@@ -866,23 +866,23 @@ public final class VehicleCfg {
     public static boolean refreshFailedLogged = false;
 
     /**
-     * Донести переписанный скрипт до машин, которые уже стоят в мире.
+     * Carry the rewritten script over to the vehicles that already stand in the world.
      *
-     * Машина копирует массу и максималку из скрипта ровно один раз — при создании физики:
+     * A vehicle copies mass and top speed from its script exactly once, on physics creation:
      * <pre>
      * // BaseVehicle.createPhysics(boolean)
      * this.setMaxSpeed(this.getScript().maxSpeed);
      * this.setInitialMass(this.getScript().getMass());
      * ...
-     * this.updateTotalMass();   // масса = initialMass + груз, и в Bullet
+     * this.updateTotalMass();   // mass = initialMass + cargo, also pushed into Bullet
      * </pre>
-     * Других мест, где их пишут, в игре нет. Переписать скрипт после этого мало: машина
-     * рядом с игроком осталась бы со старыми числами, пока чанк не выгрузится. В сети это
-     * правило, а не исключение: таблица сервера приходит уже после загрузки мира.
+     * The game writes them nowhere else. Rewriting the script after that is not enough: a vehicle
+     * near the player would keep the old numbers until its chunk unloads. In multiplayer this is
+     * the rule, not the exception: the server table arrives after the world has loaded.
      *
-     * Тяга, тормоза и бак сюда не нужны: они читаются из правил на ходу.
+     * Thrust, brakes and tank are not needed here: they are read from the rules on the fly.
      *
-     * @return сколько машин обновлено, -1 если не получилось
+     * @return how many vehicles were updated, -1 on failure
      */
     public static int refreshVehicles() {
         try {
@@ -930,12 +930,12 @@ public final class VehicleCfg {
         }
     }
 
-    /** @param layer "cfg" для файла игрока, "builtin" для встроенных данных мода — идёт в подпись источника. */
+    /** @param layer "cfg" for the player's file, "builtin" for built-in mod data; used in the source label. */
     public static List<Rule> parse(File f, String layer) {
         return parseLines(readLines(f), layer, f.getName());
     }
 
-    /** Строки файла как есть. Пустой список, если файла нет или он не читается. */
+    /** File lines as they are. An empty list if the file is missing or unreadable. */
     public static List<String> readLines(File f) {
         List<String> out = new ArrayList<String>();
         if (!f.exists()) {
@@ -962,8 +962,8 @@ public final class VehicleCfg {
     }
 
     /**
-     * Строки с правилами — без пустых и комментариев. Их сервер и рассылает: комментарии
-     * хозяина файла — его заметки, игрокам они ни к чему.
+     * Rule lines, without blanks and comments. These are what the server sends out: comments
+     * are the file owner's notes, and players have no use for them.
      */
     public static List<String> meaningfulLines(List<String> lines) {
         List<String> out = new ArrayList<String>();
@@ -977,10 +977,10 @@ public final class VehicleCfg {
     }
 
     /**
-     * Разбор правил из строк. Источник строк неважен — свой файл, встроенные данные мода
-     * или таблица, присланная сервером; формат один.
+     * Parse rules from lines. The source of the lines does not matter (our own file, the mod's
+     * built-in data or a table sent by the server); the format is the same.
      *
-     * @param label откуда строки, для сообщений об ошибках: имя файла или "server table"
+     * @param label where the lines come from, for error messages: a file name or "server table"
      */
     public static List<Rule> parseLines(List<String> lines, String layer, String label) {
         List<Rule> out = new ArrayList<Rule>();
@@ -1026,8 +1026,8 @@ public final class VehicleCfg {
                         live = true;
                         continue;
                     }
-                    // service — инструмент лаборатории; в сборке для Мастерской это просто
-                    // неизвестное слово, и строка лога об этом скажет.
+                    // service is a lab tool; in the Workshop build it is just an
+                    // unknown word, and a log line will say so.
                     if (Dev.ENABLED && "service".equalsIgnoreCase(p)) {
                         service = true;
                         continue;
@@ -1039,9 +1039,9 @@ public final class VehicleCfg {
                     }
                     String k = p.substring(0, eq).trim();
                     String v = p.substring(eq + 1).trim();
-                    // Ошибка в одном числе теряет только этот ключ. Раньше исключение
-                    // улетало в общий catch и обрывало разбор всего файла: опечатка в одной
-                    // строке молча выключала все правила ниже неё.
+                    // An error in one number loses only this key. The exception used to fly
+                    // into the outer catch and abort parsing of the whole file: a typo in one
+                    // line silently disabled every rule below it.
                     try {
                         if ("mass".equalsIgnoreCase(k)) {
                             mass = Float.parseFloat(v);
@@ -1092,10 +1092,10 @@ public final class VehicleCfg {
     }
 
     /**
-     * Правило для машины: конфиг игрока поверх данных автора мода.
+     * The rule for a vehicle: the player's config over the mod author's data.
      *
-     * Зовётся каждый кадр на каждую машину из нескольких патчей, поэтому результат
-     * кэшируется по имени и сбрасывается вместе с {@link #generation}.
+     * Called every frame for every vehicle from several patches, so the result
+     * is cached by name and reset together with {@link #generation}.
      */
     public static Rule forName(String name) {
         reloadIfNeeded();
@@ -1111,7 +1111,7 @@ public final class VehicleCfg {
         return rule;
     }
 
-    /** Имя скрипта без префикса модуля: "Base.M60A3" -> "M60A3". */
+    /** Script name without the module prefix: "Base.M60A3" -> "M60A3". */
     public static String bareName(String name) {
         if (name == null) {
             return null;
@@ -1121,31 +1121,31 @@ public final class VehicleCfg {
     }
 
     /**
-     * Без кэша: четыре слоя, каждый следующий перекрывает предыдущий по полю.
+     * Uncached: four layers, each one overriding the previous one field by field.
      * <pre>
-     *   встроенные данные мода   (vehicle-physics-defaults.cfg внутри мода)
-     *   данные автора техники     (Lua-таблица LabVehiclePhysicsData в его моде)
-     *   файл игрока               (vehicle-physics.cfg в папке Zomboid;
-     *                              у клиента в сети — таблица сервера)
-     *   таблица песочницы         (страница «Физика транспорта: машины», {@link VehicleTable})
+     *   mod's built-in data       (vehicle-physics-defaults.cfg inside the mod)
+     *   vehicle author's data     (Lua table LabVehiclePhysicsData in the author's mod)
+     *   player's file             (vehicle-physics.cfg in the Zomboid folder;
+     *                              on a multiplayer client, the server table)
+     *   sandbox table             (the "Vehicle Physics: vehicles" page, {@link VehicleTable})
      * </pre>
-     * Автор знает свою машину точнее, чем наш общий справочник; игрок — хозяин
-     * своей игры и решает последним. В сети хозяин игры — сервер. Таблица песочницы — то,
-     * что игрок выбрал в интерфейсе, поэтому она верхняя; файл остаётся инструментом
-     * лаборатории. Ссылка на пресет раскрывается внутри своего слоя ({@link #withPreset}).
+     * The author knows their vehicle better than our general reference data; the player owns
+     * their game and has the last word. In multiplayer the server owns the game. The sandbox table
+     * is what the player chose in the UI, so it goes on top; the file remains a lab tool. A preset
+     * reference is expanded within its own layer ({@link #withPreset}).
      *
-     * Переключатель песочницы «Ванильные машины: стандарт» убирает у ванильных машин только
-     * встроенный справочник: данные авторов модов, файл и таблица — явный выбор, они действуют.
+     * The sandbox switch "Vanilla vehicles: Standard" strips only the built-in reference data from
+     * vanilla vehicles: author data, the file and the table are explicit choices and still apply.
      */
     public static Rule resolve(String name) {
         return resolveLayers(name, true, null);
     }
 
     /**
-     * Слои по порядку, верхний последним: справочник, автор мода, файл, таблица песочницы.
+     * Layers in order, the top one last: reference data, mod author, file, sandbox table.
      *
-     * @param withTable учитывать ли строку таблицы песочницы ({@link VehicleTable})
-     * @param tableRow  своя строка вместо строки таблицы — предпросмотр в панели; null — нет
+     * @param withTable whether to take the sandbox table line into account ({@link VehicleTable})
+     * @param tableRow  a custom line instead of the table line (panel preview); null = none
      */
     public static Rule resolveLayers(String name, boolean withTable, Rule tableRow) {
         String bare = bareName(name);
@@ -1167,16 +1167,16 @@ public final class VehicleCfg {
         return r;
     }
 
-    /** Строки таблицы песочницы ({@link VehicleTable}), верхний слой. Заменяется целиком. */
+    /** Lines of the sandbox table ({@link VehicleTable}), the top layer. Replaced as a whole. */
     public static volatile List<Rule> sandboxRules = new ArrayList<Rule>();
-    /** Строка опции, под которую разобраны {@link #sandboxRules}. */
+    /** The option string that {@link #sandboxRules} were parsed from. */
     public static volatile String appliedTable = "";
 
     /**
-     * Первое подходящее правило слоя. Имя приходит в двух видах: VehicleScript.getName()
-     * отдаёт "97bushAmbulance", а BaseVehicle.getScriptName() — "Base.97bushAmbulance",
-     * с префиксом модуля (в игре на это даже стоит assert name.contains(".")). Пробуем оба,
-     * чтобы маску в файле не приходилось писать с ведущей звёздочкой.
+     * First matching rule of a layer. The name comes in two forms: VehicleScript.getName()
+     * returns "97bushAmbulance", and BaseVehicle.getScriptName() returns "Base.97bushAmbulance",
+     * with the module prefix (the game even has an assert name.contains(".") for this). We try both
+     * so that a mask in the file does not have to be written with a leading asterisk.
      */
     public static Rule firstMatch(List<Rule> rs, String name, String bare) {
         for (int i = 0; i < rs.size(); i++) {
@@ -1206,8 +1206,8 @@ public final class VehicleCfg {
     }
 
     /**
-     * Переписывает поля VehicleScript до того, как {@code Loaded()} отправит их в Bullet.
-     * Вызывается один раз на каждый скрипт машины при загрузке игры.
+     * Rewrites VehicleScript fields before {@code Loaded()} sends them to Bullet.
+     * Called once per vehicle script when the game loads.
      */
     public static void applyToScript(Object script) {
         if (!LabGate.active()) {
@@ -1219,42 +1219,42 @@ public final class VehicleCfg {
         try {
             String name = scriptName(script);
             noteScriptOrigin(script, name);
-            // Исходные числа всех полей, которые мы трогаем, — до первой нашей записи.
+            // Original values of all the fields we touch, from before our first write.
             float[] original = rememberOriginalFields(script, name);
             Rule rule = forName(name);
             if (rule == null || (rule.mass <= 0.0f && rule.travel <= 0.0f && rule.rest <= 0.0f
                     && rule.stiffness == null && rule.engine == null && rule.maxSpeed <= 0.0f)) {
-                // Правила больше нет — переключатель в песочнице, правка файла, другая таблица
-                // сервера. Если мы в этот скрипт писали, вернуть ему числа игры.
+                // The rule is gone: a sandbox switch, a file edit, a different server
+                // table. If we wrote to this script, give it back the game's values.
                 if (WRITTEN.remove(bareName(name))) {
                     restoreFields(script, original);
                     restoredCount++;
-                    appliedCount++;      // чтобы обход переслал скрипт в Bullet
+                    appliedCount++;      // so that the walk resends the script to Bullet
                 }
                 return;
             }
             Class<?> cls = script.getClass();
-            // Сначала всё к исходным числам: поле, которое правило больше не задаёт, не должно
-            // остаться с прошлым нашим значением.
+            // First everything back to the original values: a field the rule no longer sets must
+            // not keep our previous value.
             restoreFields(script, original);
             Field fMass = field(cls, "mass");
             float oldMass = fMass.getFloat(script);
             if (oldMass <= 0.0f) {
                 return;
             }
-            // Все ванильные значения берём из карты, а не из скрипта: этот метод
-            // вызывается заново при каждом перечитывании конфига, и в полях скрипта
-            // ко второму разу лежат уже наши числа. Считать от них — значит либо
-            // получить отношение 1.0 (масса), либо пойти вразнос (жёсткость, тяга).
+            // All vanilla values come from the map, not from the script: this method
+            // is called again on every config re-read, and by the second time the script
+            // fields already hold our numbers. Computing from them means either getting
+            // a ratio of 1.0 (mass) or a runaway (stiffness, thrust).
             float vanillaMass = rememberVanilla(name, "mass", oldMass);
-            // Тягу запоминаем всегда, а не только когда правило её меняет: ключ power
-            // переводит паспортные л.с. в множитель именно относительно неё.
+            // Thrust is always remembered, not only when the rule changes it: the power key
+            // converts rated hp into a multiplier relative to exactly this value.
             rememberVanilla(name, "engineForce", field(cls, "engineForce").getFloat(script));
-            // Массу пишем, только если она задана. Раньше правило без массы, но с
-            // maxSpeed или ходом подвески проходило верхнюю проверку и доходило до
-            // fMass.setFloat(script, 0) — машина получала нулевую массу. В конфиге таких
-            // правил не было, а у авторов модов масса не обязательна: мод вправе прислать
-            // только бак и максималку.
+            // Mass is written only if it is set. A rule without mass but with
+            // maxSpeed or suspension travel used to pass the check above and reach
+            // fMass.setFloat(script, 0): the vehicle got zero mass. The config had no such
+            // rules, but for mod authors mass is optional: a mod is free to send
+            // only a tank capacity and a top speed.
             float k = (rule.mass > 0.0f && vanillaMass > 0.0f) ? rule.mass / vanillaMass : 1.0f;
             rule.ratio = k;
             if (rule.mass > 0.0f) {
@@ -1331,19 +1331,19 @@ public final class VehicleCfg {
     }
 
     /**
-     * Запасной путь: пройти по всем скриптам машин самим, без помощи патчера.
+     * Fallback path: walk all vehicle scripts ourselves, without the patcher's help.
      *
-     * Нужен, если ZombieBuddy не зацепит {@code VehicleScript.Loaded()}. Проход даёт
-     * то же самое, но с одной оговоркой: {@code toBullet()} к этому моменту уже отработал,
-     * поэтому параметры, зашитые в нативную часть при регистрации скрипта (в том числе
-     * жёсткость подвески), приходится отправлять заново — для этого {@code toBullet()}
-     * вызывается повторно. На уже созданные машины это не подействует, только на те,
-     * что появятся позже.
+     * Needed if ZombieBuddy fails to hook {@code VehicleScript.Loaded()}. The walk gives
+     * the same result with one caveat: {@code toBullet()} has already run by this point,
+     * so the parameters baked into the native side when the script was registered (including
+     * suspension stiffness) have to be sent again; that is why {@code toBullet()}
+     * is called a second time. This does not affect vehicles already created, only those
+     * that appear later.
      *
-     * Масса при этом в любом случае доходит: её игра берёт из скрипта при создании машины
-     * и, отдельно, каждый кадр через getFudgedMass().
+     * The mass gets through either way: the game takes it from the script when a vehicle is
+     * created and, separately, every frame through getFudgedMass().
      *
-     * @return сколько скриптов обработано, -1 если не получилось
+     * @return how many scripts were processed, -1 on failure
      */
     public static int applyToAllScripts() {
         try {
@@ -1388,48 +1388,48 @@ public final class VehicleCfg {
     }
 
     /**
-     * Если через три секунды после первой машины патчер так и не тронул ни одного
-     * скрипта, значит {@code VehicleScript.Loaded()} не перехвачен — идём вручную.
+     * If three seconds after the first vehicle the patcher still has not touched a single
+     * script, then {@code VehicleScript.Loaded()} is not intercepted, so we do it by hand.
      */
     public static void maybeFallback() {
         ensureApplied();
     }
 
     /**
-     * Применить таблицу ко всем скриптам машин. Выполняется один раз за запуск.
+     * Apply the table to all vehicle scripts. Runs once per launch.
      *
-     * Вызывается из патча на {@code BaseVehicle.createPhysics()}, то есть непосредственно
-     * перед тем, как первая машина будет зарегистрирована в Bullet. Раньше здесь стояла
-     * задержка в три секунды «на случай, если сработает штатный патч» — из-за неё подвеска
-     * успевала зашиться по-старому, и правка жёсткости не доезжала до машины, в которой
-     * игрок уже сидел. Ждать было нечего: штатный патч на VehicleScript.Loaded() тогда не
-     * срабатывал. Теперь срабатывает (класс прогревается в {@code Main.PRELOAD}, в логе
-     * {@code patching zombie.scripting.objects.VehicleScript.Loaded}), и этот обход остался
-     * страховкой на случай, если прогрев перестанет помогать.
+     * Called from the patch on {@code BaseVehicle.createPhysics()}, i.e. right before
+     * the first vehicle gets registered in Bullet. There used to be a three-second delay here
+     * "in case the regular patch fires"; because of it the suspension had time to be baked in
+     * the old way, and the stiffness fix never reached the vehicle the player was already sitting
+     * in. There was nothing to wait for: the regular patch on VehicleScript.Loaded() did not fire
+     * back then. Now it does (the class is warmed up in {@code Main.PRELOAD}; the log shows
+     * {@code patching zombie.scripting.objects.VehicleScript.Loaded}), and this walk remains
+     * as insurance in case the warm-up stops helping.
      */
     public static void ensureApplied() {
         if (!LabGate.active() || fallbackDone) {
             return;
         }
         reloadIfNeeded();
-        // Смотрим все слои, а не только файл игрока. Раньше проверка была
-        // rules.isEmpty(), и без своего файла обход не запускался вовсе: встроенные
-        // данные и данные авторов не доходили бы до скриптов. Не вылезало, потому что
-        // в лаборатории файл есть всегда, а штатный патч на Loaded() теперь срабатывает.
-        // Но у клиента в сети верхний слой пуст до прихода таблицы сервера — это норма.
+        // Look at all layers, not just the player's file. The check used to be rules.isEmpty(),
+        // and without a player file the walk never started at all: the built-in data and the
+        // author data would never reach the scripts. It did not show up because the lab always
+        // has the file, and the regular patch on Loaded() now fires. But on a multiplayer client
+        // the top layer is empty until the server table arrives, and that is normal.
         if (rules.isEmpty() && defaults.isEmpty() && LuaRegistry.entries.isEmpty()) {
             return;
         }
         fallbackDone = true;
         if (appliedCount > 0) {
-            return;      // штатный патч всё-таки отработал, обход не нужен
+            return;      // the regular patch did run after all, no walk needed
         }
         Log.debug("[LabVehiclePhysics] applying the mass table by walking vehicle scripts "
                 + "(the regular patch on VehicleScript.Loaded() never fires)");
         applyToAllScripts();
     }
 
-    /** Итоговая сводка — печатается один раз, когда в мире появилась первая машина. */
+    /** Final summary, printed once when the first vehicle appears in the world. */
     public static void printSummaryOnce() {
         if (summaryPrinted) {
             return;
@@ -1445,20 +1445,20 @@ public final class VehicleCfg {
     }
 
     /**
-     * Разрешённые значения по каждому скрипту машины — проверка всего парка без поездок.
+     * Resolved values for every vehicle script: a check of the whole fleet without driving.
      *
-     * <h2>Зачем</h2>
-     * Множители печатались только тогда, когда игрок сядет за руль конкретной машины:
-     * {@code Patch_enginePower} висит на {@code CarController.checkTire}, а тот зовётся
-     * при управлении. Проверить тридцать машин значило прокатиться на каждой.
+     * <h2>Why</h2>
+     * The multipliers used to be printed only once the player got behind the wheel of a specific
+     * vehicle: {@code Patch_enginePower} sits on {@code CarController.checkTire}, which is called
+     * while driving. Checking thirty vehicles meant taking each one for a drive.
      *
-     * Здесь мы обходим {@code ScriptManager.getAllVehicleScripts()} и печатаем то же,
-     * что получил бы патч: какое правило совпало и во что разрешились множители.
-     * Одна загрузка мира проверяет весь парк.
+     * Here we walk {@code ScriptManager.getAllVehicleScripts()} and print the same thing
+     * the patch would get: which rule matched and what the multipliers resolved to.
+     * One world load checks the whole fleet.
      *
-     * Отдельно помечаем случаи, когда множитель задан, но разрешился в единицу — это
-     * ровно тот молчаливый отказ, на котором {@code brakeMul=auto} простоял сломанным
-     * неизвестно сколько.
+     * Cases where a multiplier is set but resolved to one are flagged separately: that is
+     * exactly the silent failure that kept {@code brakeMul=auto} broken for who knows
+     * how long.
      */
     public static void printAudit() {
         try {
@@ -1526,15 +1526,15 @@ public final class VehicleCfg {
         }
     }
 
-    /** Разбор множителя: число, "auto" (отношение масс) или ничего. */
+    /** Parse a multiplier: a number, "auto" (the mass ratio) or nothing. */
     public static float multiplier(String spec, Rule rule) {
         return multiplier(spec, rule, null);
     }
 
     /**
-     * @param scriptName имя скрипта машины. Нужно только для {@code auto}: по нему
-     *                   находится ванильная масса. Без имени {@code auto} откатывается
-     *                   на {@code rule.ratio}, а тот заполняется лишь в {@code applyToScript}.
+     * @param scriptName vehicle script name. Needed only for {@code auto}: it is used to
+     *                   look up the vanilla mass. Without a name {@code auto} falls back
+     *                   to {@code rule.ratio}, which is only filled in {@code applyToScript}.
      */
     public static float multiplier(String spec, Rule rule, String scriptName) {
         if (spec == null) {
@@ -1551,16 +1551,16 @@ public final class VehicleCfg {
     }
 
     /**
-     * Множитель тяги на трогании.
+     * Thrust multiplier at pull-away.
      *
-     * В игре тяга зависит от оборотов линейно и на холостых равна половине номинала:
-     * {@code engineForce = power * (0.5 + обороты / 24000)}. Ни понижающей передачи,
-     * ни гидротрансформатора в модели нет, поэтому низовой тяги не хватает именно
-     * тяжёлой технике — лёгким машинам половины номинала достаточно.
+     * In the game, thrust depends on rpm linearly and at idle equals half the rated value:
+     * {@code engineForce = power * (0.5 + rpm / 24000)}. The model has neither a low gear
+     * nor a torque converter, so it is specifically heavy vehicles that lack low-end
+     * thrust; for light vehicles half the rated value is enough.
      *
-     * Возвращаем множитель, максимальный на месте и линейно сходящий к единице
-     * к скорости {@code lowGearTo}. Так ведёт себя гидротрансформатор от стопора
-     * до точки сцепления.
+     * We return a multiplier that peaks at standstill and tapers linearly to one
+     * at the speed {@code lowGearTo}. That is how a torque converter behaves from stall
+     * to the coupling point.
      */
     public static float lowGearBoost(Rule rule, float speedKmh) {
         if (rule.lowGear <= 1.0f) {
@@ -1574,7 +1574,7 @@ public final class VehicleCfg {
         return 1.0f + (rule.lowGear - 1.0f) * t;
     }
 
-    /** Самый большой объём бака среди правил. Ноль, если объёмы не задавались. */
+    /** The largest tank capacity among the rules. Zero if no capacities were set. */
     public static int largestTank() {
         return largestTank;
     }

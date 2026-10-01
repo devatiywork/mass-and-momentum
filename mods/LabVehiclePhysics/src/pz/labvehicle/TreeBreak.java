@@ -7,86 +7,86 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Тяжёлая машина валит деревья — упором или с разгона.
+ * A heavy vehicle fells trees, by pushing against them or by ramming them with a run-up.
  *
- * <h2>Что было в ванили</h2>
- * Дерево для физики машины — твёрдое препятствие. Врезалась — остановилась; по тому, насколько
- * резко упала скорость, игра бьёт саму машину ({@code crash}) и деревья вокруг
- * ({@code damageObjects} → {@code IsoTree.HitByVehicle}). Урон дереву — 5% от ОСТАВШЕГОСЯ
- * здоровья: оно таяло и не падало даже от пятидесятитонного танка. А упереться и продавить
- * ствол, как бульдозер, нельзя было вовсе: без удара ничего не происходит.
+ * <h2>What vanilla does</h2>
+ * For the vehicle physics a tree is a solid obstacle: the vehicle hits it and stops. Depending on
+ * how sharply the speed dropped, the game damages the vehicle itself ({@code crash}) and the trees
+ * around it ({@code damageObjects} → {@code IsoTree.HitByVehicle}). A tree loses 5% of its
+ * REMAINING health: it wastes away but never falls, even from a fifty-tonne tank. And pushing a
+ * trunk over like a bulldozer is not possible at all: without an impact nothing happens.
  *
- * <h2>Модель: сила, а не энергия</h2>
- * Первая версия сравнивала энергию удара с прочностью — и танку приходилось разгоняться даже
- * на маленькую ёлку. Деревья валят силой: машина упирается и давит, пока корни не сдадут.
+ * <h2>Model: force, not energy</h2>
+ * The first version compared impact energy with strength, and the tank needed a run-up even for a
+ * small fir. Trees are felled by force: the vehicle pushes and presses until the roots give way.
  * <pre>
- *   сила упора  F = 0.7 · M · g           (предел сцепления с грунтом)
- *   с разгона   F · (1 + v / V_REF)       (удар добавляет, но не решает всё)
- *   сопротивление дерева — TREE_KN по размеру 1–8
+ *   pushing force    F = 0.7 · M · g         (ground traction limit)
+ *   with a run-up    F · (1 + v / V_REF)     (the impact adds force but is not everything)
+ *   tree resistance  TREE_KN by size 1–8
  * </pre>
- * Сопротивление — порядок величин из опытов по вытягиванию деревьев (опрокидывающий момент
- * у основания, пересчитанный на силу на высоте бампера): молодая ёлка — единицы кН, дерево
- * в 20–25 см — около 25 кН, в 60 см — около 220 кН. Игровые, а не измеренные для PZ числа.
+ * The resistance is an order-of-magnitude figure from tree-pulling experiments (overturning moment
+ * at the base, converted to a force at bumper height): a young fir is a few kN, a 20–25 cm trunk
+ * about 25 kN, a 60 cm one about 220 kN. Gameplay numbers, not measured for PZ.
  *
- * Что выходит: танк (52 т, около 360 кН) продавливает любое дерево с места; Bushmaster
- * (11.4 т, 78 кН) — до пятого размера, крупнее — с разгона; легковушка (9 кН) — только
- * саженцы, с разгона — ещё третий размер.
+ * The result: the tank (52 t, about 360 kN) pushes over any tree from a standstill; the Bushmaster
+ * (11.4 t, 78 kN) up to size five, and larger ones with a run-up; a passenger car (9 kN) only
+ * saplings, plus size three with a run-up.
  *
- * <h2>Упор</h2>
- * Каждый кадр машины ({@link #stepPush}): водитель жмёт газ, машина почти стоит, ствол
- * вплотную по ходу. Если силы хватает, дерево падает через {@code PUSH_TIME · Fдерева / Fмашины} —
- * танку на ёлку доля секунды, Bushmaster на пятый размер — около секунды. Не хватает — стоит.
+ * <h2>Pushing</h2>
+ * Every vehicle frame ({@link #stepPush}): driver on the gas, vehicle almost still, trunk right
+ * ahead. With enough force the tree falls after {@code PUSH_TIME · Ftree / Fvehicle}: a split
+ * second for the tank on a fir, about a second for the Bushmaster on size five. If not, it stands.
  *
- * <h2>Удар</h2>
- * {@code crash()} ({@link #beforeCrash}) решает до урона: если дерево по ходу ломается, удар
- * отменяется целиком — машина ничего не «встретила», урона нет. Повал — сразу после, в
- * {@code damageObjects} ({@link #afterDamageObjects}). Физика останавливает машину раньше,
- * чем мы узнаём об ударе, поэтому, когда дерево исчезнет, скорость возвращается за вычетом
- * работы на повал: {@code v' = sqrt(v² − 2·Fдерева·BREAK_TRAVEL / M)}.
+ * <h2>Impact</h2>
+ * {@code crash()} ({@link #beforeCrash}) decides before any damage: if the tree ahead breaks, the
+ * impact is cancelled entirely; the vehicle "met" nothing and takes no damage. The felling follows
+ * right after, in {@code damageObjects} ({@link #afterDamageObjects}). Physics stops the vehicle
+ * before we learn about the impact, so once the tree is gone the speed is restored minus the work
+ * spent on felling: {@code v' = sqrt(v² − 2·Ftree·BREAK_TRAVEL / M)}.
  *
- * <h2>Повал и сеть</h2>
- * Штатный, как от топора ({@code IsoTree.toppleTree}): дерево исчезает, падают брёвна, у
- * больших остаётся пень. В сети повалить может только сервер ({@code toppleTree} начинается с
- * {@code if (!GameClient.client)}) — клиент водителя шлёт {@code treeHit} с силой, сервер
- * проверяет правдоподобие по своей массе машины и решает по своему дереву ({@link #serverTreeHit}).
+ * <h2>Felling and multiplayer</h2>
+ * Stock felling, like an axe ({@code IsoTree.toppleTree}): the tree vanishes, logs drop, big trees
+ * leave a stump. In multiplayer only the server can fell ({@code if (!GameClient.client)} guards
+ * {@code toppleTree}): the driver's client sends {@code treeHit} with the force; the server checks
+ * plausibility by its own vehicle mass and decides by its own tree ({@link #serverTreeHit}).
  */
 public final class TreeBreak {
 
-    /** Коэффициент сцепления с грунтом для силы упора. */
+    /** Ground traction coefficient for the pushing force. */
     public static final float PUSH_MU = 0.7f;
     public static final float G = 9.81f;
-    /** Скорость, на которой сила удара вдвое больше силы упора, м/с (72 км/ч). */
+    /** Speed at which the impact force is twice the pushing force, m/s (72 km/h). */
     public static final float V_REF = 20.0f;
-    /** Сопротивление дерева по размеру 1–8, кН. */
+    /** Tree resistance by size 1–8, kN. */
     public static final float[] TREE_KN = {2.0f, 5.0f, 12.0f, 25.0f, 45.0f, 80.0f, 130.0f, 220.0f};
-    /** Время упора, если сил впритык; с запасом — пропорционально меньше. */
+    /** Pushing time when the force is just barely enough; with a margin, proportionally less. */
     public static final float PUSH_TIME = 2.0f;
     public static final float MIN_PUSH_TIME = 0.15f;
-    /** Быстрее этого — уже не упор, а езда, м/с. */
+    /** Faster than this is driving, not pushing, m/s. */
     public static final float PUSH_MAX_SPEED = 1.0f;
-    /** Пауза в упоре, после которой счёт начинается заново. */
+    /** A pause in pushing after which the count starts over. */
     public static final long PUSH_RESET_NANOS = 400_000_000L;
-    /** Ствол вплотную: радиус проверки касания для упора и для удара, клеток. */
+    /** Trunk up close: contact check radius for pushing and for impact, in tiles. */
     public static final float PUSH_CONTACT = 0.5f;
     public static final float IMPACT_CONTACT = 1.0f;
-    /** На сколько надо сдвинуть ствол, чтобы корни сдали, м. Работа на повал = сила × это. */
+    /** How far the trunk must move for the roots to give way, m. Felling work = force × this. */
     public static final float BREAK_TRAVEL = 0.6f;
     public static final float SPEED_MAX = 40.0f;
     /**
-     * Сервер: насколько далеко от центра машины может стоять дерево, клеток. Не меньше
-     * SERVER_MAX_DIST и не меньше половины длины машины плюс SERVER_SLACK — иначе автобус
-     * или грузовик с прицепом упрётся в дерево, а сервер решит, что оно слишком далеко.
+     * Server: how far from the vehicle's center a tree may stand, in tiles. At least
+     * SERVER_MAX_DIST and at least half the vehicle length plus SERVER_SLACK; otherwise a bus
+     * or a truck with a trailer pushes against a tree and the server decides it is too far away.
      */
     public static final float SERVER_MAX_DIST = 6.0f;
     public static final float SERVER_SLACK = 3.0f;
     public static final long RESTORE_WINDOW_NANOS = 2_000_000_000L;
-    /** Не просить сервер про то же дерево чаще этого. */
+    /** Do not ask the server about the same tree more often than this. */
     public static final long REQUEST_COOLDOWN_NANOS = 1_500_000_000L;
     public static final String MODULE = "LabVehiclePhysics";
 
     public static volatile boolean broken = false;
 
-    /** Решение, принятое в crash(), исполняется в damageObjects() того же удара. */
+    /** A decision made in crash() is carried out in damageObjects() of the same impact. */
     public static Object plannedVehicle;
     public static Object plannedTree;
     public static float plannedForce;
@@ -94,7 +94,7 @@ public final class TreeBreak {
     public static float plannedDirX;
     public static float plannedDirY;
 
-    /** Упор: какое дерево давим и сколько уже. */
+    /** Pushing: which tree we are pushing and for how long so far. */
     public static final class Push {
         public Object tree;
         public float seconds;
@@ -103,7 +103,7 @@ public final class TreeBreak {
 
     public static final Map<Object, Push> PUSHES = new WeakHashMap<Object, Push>();
 
-    /** Ждём, пока дерево исчезнет, чтобы вернуть машине скорость. */
+    /** Waiting for the tree to disappear so that the vehicle's speed can be restored. */
     public static final class Pending {
         public Object tree;
         public Object square;
@@ -115,10 +115,10 @@ public final class TreeBreak {
 
     public static final Map<Object, Pending> PENDING = new WeakHashMap<Object, Pending>();
     public static volatile boolean anyPending = false;
-    /** Дерево -> когда последний раз просили сервер. */
+    /** Tree -> when the server was last asked about it. */
     public static final Map<Object, long[]> REQUESTED = new WeakHashMap<Object, long[]>();
 
-    // ---- рефлексия
+    // ---- reflection
     public static Class<?> treeClass;
     public static Field fLastVelocity;
     public static Field fVx;
@@ -201,7 +201,7 @@ public final class TreeBreak {
                 + "2..220 kN by size, a run-up adds (1 + v/" + VehicleCfg.fmt(V_REF) + ")");
     }
 
-    // ================================================================ модель
+    // ================================================================ model
 
     public static float pushForce(float mass) {
         return PUSH_MU * mass * G;
@@ -217,13 +217,13 @@ public final class TreeBreak {
         return TREE_KN[i] * 1000.0f;
     }
 
-    // ================================================================ удар
+    // ================================================================ impact
 
     /**
-     * Вход в BaseVehicle.crash(): если по ходу стоит дерево, которое этот удар валит, —
-     * отменить удар целиком (без урона машине) и запланировать повал.
+     * Entry to BaseVehicle.crash(): if a tree that this impact fells stands ahead, cancel
+     * the impact entirely (no damage to the vehicle) and schedule the felling.
      *
-     * @return true — пропустить crash()
+     * @return true to skip crash()
      */
     public static boolean beforeCrash(Object vehicle) {
         plannedVehicle = null;
@@ -239,7 +239,7 @@ public final class TreeBreak {
             if (!(speed > 0.5f)) {
                 return false;
             }
-            // Ось Z скорости в Bullet — это Y мира (так их сопоставляет и сама игра).
+            // In Bullet the velocity's Z axis is world Y (the game itself maps them the same way).
             float dirX = vx / speed;
             float dirY = vz / speed;
             Object tree = treeAhead(vehicle, dirX, dirY, IMPACT_CONTACT);
@@ -253,8 +253,8 @@ public final class TreeBreak {
                 log(vehicle, tree, mass, speed, force, resist, false, "run-up");
                 return false;
             }
-            // Удар отменяем при каждом касании ломающегося дерева, а повал просим не чаще
-            // кулдауна: пока сервер отвечает, машина успевает ткнуться в ствол ещё не раз.
+            // Cancel the impact on every touch of a breaking tree, but ask for the felling at most
+            // once per cooldown: until the server replies, the vehicle keeps hitting the trunk.
             if (claim(tree)) {
                 log(vehicle, tree, mass, speed, force, resist, true, "run-up");
                 plannedVehicle = vehicle;
@@ -271,7 +271,7 @@ public final class TreeBreak {
         }
     }
 
-    /** Выход из BaseVehicle.damageObjects(): исполнить повал, решённый в crash(). */
+    /** Exit from BaseVehicle.damageObjects(): carry out the felling decided in crash(). */
     public static void afterDamageObjects(Object vehicle) {
         if (plannedVehicle == null || plannedVehicle != vehicle) {
             return;
@@ -300,11 +300,11 @@ public final class TreeBreak {
         }
     }
 
-    // ================================================================ упор
+    // ================================================================ pushing
 
     /**
-     * Каждый кадр машины: водитель жмёт газ, машина почти стоит, ствол вплотную — давим.
-     * Считаем только у своего водителя: чужую машину в сети толкает её клиент.
+     * Every vehicle frame: driver on the gas, vehicle almost still, trunk right ahead, so we push.
+     * Only for our own driver: in multiplayer someone else's vehicle is pushed by its own client.
      */
     public static void stepPush(Object vehicle) {
         if (broken || vehicle == null || !LabGate.active() || !LabSettings.trees()) {
@@ -397,11 +397,11 @@ public final class TreeBreak {
         }
     }
 
-    // ================================================================ общее
+    // ================================================================ common
 
     /**
-     * Ствол вплотную по ходу: из деревьев, которых машина касается (штатная проверка игры
-     * testCollisionWithObject), — стоящее впереди и ближе всех. Стоящие сбоку не в счёт.
+     * The trunk right ahead: of the trees the vehicle touches (the game's stock check
+     * testCollisionWithObject), the one ahead and closest. Trees to the side do not count.
      */
     public static Object treeAhead(Object vehicle, float dirX, float dirY, float contact) throws Exception {
         float x = ((Float) mGetX.invoke(vehicle)).floatValue();
@@ -451,8 +451,8 @@ public final class TreeBreak {
     }
 
     /**
-     * Можно ли сейчас валить это дерево: про него не просили последние REQUEST_COOLDOWN_NANOS.
-     * Если можно — отмечает, что просим сейчас.
+     * Whether this tree can be felled now: not requested in the last REQUEST_COOLDOWN_NANOS.
+     * If so, records that we are requesting it now.
      */
     public static boolean claim(Object tree) {
         long now = System.nanoTime();
@@ -466,7 +466,7 @@ public final class TreeBreak {
         }
     }
 
-    /** Повалить: в одиночной игре сами, в сети просим сервер. Кулдаун проверяет вызывающий ({@link #claim}). */
+    /** Fell locally in singleplayer, via the server in multiplayer. Caller checks cooldown ({@link #claim}). */
     public static void fell(Object vehicle, Object tree, float force) throws Exception {
         if (fClient.getBoolean(null)) {
             sendTreeHit(vehicle, tree, force);
@@ -493,8 +493,8 @@ public final class TreeBreak {
     }
 
     /**
-     * Каждый кадр машины: вернуть скорость, когда дерево, сломанное ударом, исчезло.
-     * Пока никто не ждёт — одна проверка флага.
+     * Every vehicle frame: restore the speed once the tree broken by the impact is gone.
+     * While nobody is waiting, this costs a single flag check.
      */
     public static void stepPending(Object vehicle) {
         if (!anyPending || vehicle == null) {
@@ -525,13 +525,13 @@ public final class TreeBreak {
                 return;
             }
             float mass = ((Float) mFudgedMass.invoke(vehicle)).floatValue();
-            // Очередь импульсов доходит до машины на 0.3 (сила ×30 на один шаг Bullet в 0.01 с).
+            // Queued impulses reach the vehicle at 0.3 (force ×30 for one 0.01 s Bullet step).
             float strength = mass * dv / AnimalImpact.APPLIED_FRACTION;
             float x = ((Float) mGetX.invoke(vehicle)).floatValue();
             float y = ((Float) mGetY.invoke(vehicle)).floatValue();
             float z = ((Float) mGetZ.invoke(vehicle)).floatValue();
-            // applyImpulseGeneric принимает направление в осях мира (x, y, высота) и сам
-            // переставляет их в оси Bullet; точка приложения — центр машины, без закрутки.
+            // applyImpulseGeneric takes the direction in world axes (x, y, height) and remaps them
+            // to Bullet axes itself; the point of application is the vehicle's center, so no spin.
             mApplyGeneric.invoke(vehicle, Float.valueOf(x), Float.valueOf(y), Float.valueOf(z),
                     Float.valueOf(p.dirX), Float.valueOf(p.dirY), Float.valueOf(0.0f), Float.valueOf(strength));
         } catch (Throwable t) {
@@ -559,11 +559,11 @@ public final class TreeBreak {
                 breaks ? "FELLED" + (fClient.getBoolean(null) ? " (asked the server)" : "") : "holds"));
     }
 
-    // ================================================================ сервер
+    // ================================================================ server
 
     /**
-     * Сервер: клиент водителя сообщил, что валит дерево. Проверяем правдоподобие по своей массе
-     * машины и решаем по своему дереву.
+     * Server: the driver's client reports felling a tree. Check plausibility against our own
+     * vehicle mass and decide based on our own copy of the tree.
      */
     public static void serverTreeHit(Object player, Object args) {
         if (!LabGate.active() || broken || player == null || args == null) {
@@ -591,7 +591,7 @@ public final class TreeBreak {
             if (sq == null) {
                 return;
             }
-            // Только по индексу: у списка объектов клетки (PZArrayList) iterator() бросает
+            // Index access only: on the square's object list (PZArrayList) iterator() throws
             // UnsupportedOperationException.
             Object tree = null;
             List<?> objects = (List<?>) mSquareObjects.invoke(sq);
@@ -654,7 +654,7 @@ public final class TreeBreak {
 
     public static void fail(Throwable t) {
         broken = true;
-        // Исключение из метода игры приходит обёрнутым в InvocationTargetException — нужна причина.
+        // A game method's exception comes wrapped in InvocationTargetException; we need the cause.
         Throwable cause = t;
         while (cause instanceof java.lang.reflect.InvocationTargetException && cause.getCause() != null) {
             cause = cause.getCause();
@@ -662,7 +662,7 @@ public final class TreeBreak {
         Log.info("[LabVehiclePhysics] ERROR in tree breaking, disabling: " + cause + where(cause));
     }
 
-    /** Где упало: верхний кадр стека и, если он не наш, первый кадр нашего кода. */
+    /** Where it failed: the top stack frame and, if not ours, the first frame of our code. */
     public static String where(Throwable t) {
         StackTraceElement[] st = t.getStackTrace();
         if (st == null || st.length == 0) {

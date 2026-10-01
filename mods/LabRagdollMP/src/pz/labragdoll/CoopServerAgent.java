@@ -9,53 +9,53 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Кооп-сервер с ZombieBuddy.
+ * Co-op server with ZombieBuddy.
  *
- * <h2>Проблема</h2>
- * «Хостинг» в меню поднимает сервер отдельным процессом: {@code CoopMaster.launchServer}
- * собирает команду {@code jre64\bin\java ... zombie.network.GameServer -coop} из жёстко
- * заданного списка аргументов. {@code -agentlib:zbNative} из {@code ProjectZomboid64.json}
- * туда не попадает, а сам ZombieBuddy этот запуск не трогает. Выходит, что на кооп-сервере
- * нет ни одного Java-мода: деревья не падают (валит сервер), трупы не синхронизируются,
- * серверной таблицы машин и серверных патчей нет. В логе сервера ни строки {@code [ZB]}, а
- * наш Lua пишет «the Java side (LabVehiclePhysicsNet) is not available». В лаборатории этого
- * не видно: там выделенный сервер, которому агент передан через {@code _JAVA_OPTIONS}.
+ * <h2>The problem</h2>
+ * "Host" in the menu starts the server as a separate process: {@code CoopMaster.launchServer}
+ * builds the command {@code jre64\bin\java ... zombie.network.GameServer -coop} from a hard-coded
+ * argument list. {@code -agentlib:zbNative} from {@code ProjectZomboid64.json} does not make it
+ * in, and ZombieBuddy itself does not touch this launch. As a result the co-op server has
+ * no Java mods at all: trees do not fall (the server does the felling), corpses are not synced,
+ * and there is no server-side vehicle table or server patches. The server log has no {@code [ZB]}
+ * line at all, and our Lua reports "the Java side (LabVehiclePhysicsNet) is not available". This
+ * does not show in the lab, whose dedicated server gets the agent via {@code _JAVA_OPTIONS}.
  *
- * <h2>Решение</h2>
- * Подменить, не переписывая запуск, можно только один аргумент команды — флаг сборщика
- * мусора из {@code private String getGarbageCollector()}: он встаёт одной строкой перед
- * именем главного класса. Возвращаем вместо него {@code @файл}: лаунчер java (JDK 9+, в игре
- * 25) разворачивает такой аргумент в содержимое файла. В файле — прежний флаг сборщика, флаги
- * доступа клиента ({@code --enable-native-access}, {@code --add-exports}: с ними запускается и
- * выделенный сервер лаборатории) и агент ZombieBuddy в том же виде, что у клиента, но с
- * {@code policy=deny-new}.
+ * <h2>The solution</h2>
+ * Without rewriting the launch, only one argument of the command can be swapped: the garbage
+ * collector flag from {@code private String getGarbageCollector()}, a single entry placed right
+ * before the main class name. We return {@code @file} in its place: the java launcher (JDK 9+,
+ * 25 in the game) expands such an argument into the file's contents. The file holds the original
+ * GC flag, the client's access flags ({@code --enable-native-access}, {@code --add-exports}: the
+ * lab's dedicated server also starts with them) and the ZombieBuddy agent in the same form as on
+ * the client, but with {@code policy=deny-new}.
  *
- * {@code deny-new}: сервер загружает только те Java-моды, которые игрок уже одобрил на клиенте
- * с «запомнить» (одобрения общие — {@code ~/.zombie_buddy/mod_approvals.json}, {@code user.home}
- * сервер получает от клиента), и ни о чём не спрашивает. Спрашивать ему некого: окна у
- * кооп-сервера нет, вопрос повесил бы запуск. Выбранный игроком {@code allow-all} сохраняется.
- * Клиентские моды ({@code media/java/client/}, например Viewpoint) ZombieBuddy на сервере
- * пропускает сам.
+ * {@code deny-new}: the server loads only the Java mods the player has already approved on the
+ * client with "remember" (approvals are shared: {@code ~/.zombie_buddy/mod_approvals.json}; the
+ * server gets {@code user.home} from the client), and asks nothing. There is no one to ask:
+ * the co-op server has no window, so a prompt would hang the launch. A player's {@code allow-all}
+ * choice is kept. Client mods ({@code media/java/client/}, e.g. Viewpoint) are skipped on the
+ * server by ZombieBuddy itself.
  *
- * <h2>Предохранитель</h2>
- * Как {@link LabGate}: вмешиваемся, только если мод есть в {@code Mods=} запускаемого сервера
- * ({@code <cachedir>/Server/<имя>.ini}). Имя сервера getGarbageCollector не знает — его ловит
- * {@link Patch_coopServerName} на входе в launchServer. Не смогли прочитать ini — добавляем
- * агент и пишем об этом в лог, как LabGate при сбое.
+ * <h2>Safety gate</h2>
+ * Like {@link LabGate}: we intervene only if the mod is in the {@code Mods=} of the server being
+ * launched ({@code <cachedir>/Server/<name>.ini}). getGarbageCollector does not know the server
+ * name; {@link Patch_coopServerName} catches it on entry to launchServer. If the ini cannot be
+ * read, we add the agent and log that, as LabGate does on failure.
  *
- * <h2>Два мода — один агент</h2>
- * Такой же класс есть в LabVehiclePhysics: любой из модов может стоять без другого. Кто первый, тот
- * пишет файл; второй узнаёт его по имени {@link #FILE_NAME} и ничего не меняет.
+ * <h2>Two mods, one agent</h2>
+ * LabVehiclePhysics has the same class: either mod can be installed without the other. The first
+ * writes the file; the second recognises it by its name {@link #FILE_NAME} and changes nothing.
  *
- * Работает, только если Java-мод уже загружен в клиенте к моменту хостинга, то есть включён
- * в списке модов главного меню, а не только в настройках сервера.
+ * Works only if the Java mod is already loaded in the client by the time of hosting, i.e. enabled
+ * in the main menu's mod list, not just in the server settings.
  */
 public final class CoopServerAgent {
 
     public static final String MOD_ID = LabGate.MOD_ID;
-    /** Файл аргументов — общий для обоих модов: по имени второй видит, что агент уже добавлен. */
+    /** Argument file shared by both mods: by its name the second sees the agent is already added. */
     public static final String FILE_NAME = "mass-momentum-coop-server.args";
-    /** Политика ZombieBuddy на сервере, если игрок не выбрал allow-all или deny-new. */
+    /** ZombieBuddy policy on the server unless the player chose allow-all or deny-new. */
     public static final String POLICY = "deny-new";
 
     public static volatile String serverName;
@@ -64,14 +64,14 @@ public final class CoopServerAgent {
     private CoopServerAgent() {
     }
 
-    /** Вход в CoopMaster.launchServer: запомнить, какой сервер запускается. */
+    /** Entry to CoopMaster.launchServer: remembers which server is being launched. */
     public static void launching(String name) {
         serverName = name;
     }
 
     /**
-     * Выход из CoopMaster.getGarbageCollector: {@code @файл} с агентом ZombieBuddy вместо
-     * флага сборщика — или прежний флаг, если мод на этом сервере не стоит.
+     * Exit from CoopMaster.getGarbageCollector: an {@code @file} with the ZombieBuddy agent
+     * instead of the GC flag, or the original flag if the mod is not installed on this server.
      */
     public static String argument(String gc) {
         if (broken) {
@@ -129,9 +129,9 @@ public final class CoopServerAgent {
     }
 
     /**
-     * Агент клиента с политикой для сервера. Параметры агента идут после первого «=»
-     * ({@code -agentlib:zbNative=a=b,c=d}, у {@code -javaagent:} — после «=» за «.jar»).
-     * allow-all и deny-new игрока сохраняются, любая другая политика заменяется на deny-new.
+     * The client's agent with the policy for the server. Agent options follow the first "="
+     * ({@code -agentlib:zbNative=a=b,c=d}; for {@code -javaagent:}, after the "=" past ".jar").
+     * The player's allow-all and deny-new are kept; any other policy is replaced with deny-new.
      */
     public static String withPolicy(String agent) {
         int from = 0;
@@ -166,8 +166,8 @@ public final class CoopServerAgent {
     }
 
     /**
-     * Строка файла аргументов. Пробелы, кавычки, «#» и обратная косая требуют кавычек, а
-     * внутри кавычек обратная косая экранирует: {@code C:\\Program Files}.
+     * A line of the argument file. Spaces, quotes, "#" and backslashes require quoting, and
+     * inside quotes a backslash escapes: {@code C:\\Program Files}.
      */
     public static String quote(String s) {
         for (int i = 0; i < s.length(); i++) {
@@ -180,8 +180,8 @@ public final class CoopServerAgent {
     }
 
     /**
-     * Есть ли мод в {@code Mods=} сервера. null — ini не нашли или не прочитали.
-     * Читаем как ISO-8859-1: в описании сервера бывает что угодно, а id модов — ASCII.
+     * Whether the mod is in the server's {@code Mods=}; null if the ini could not be found or read.
+     * Read as ISO-8859-1: the server description may contain anything, but mod ids are ASCII.
      */
     public static Boolean listed(String name) {
         if (name == null || name.isEmpty()) {

@@ -1,10 +1,10 @@
 --[[
-  Повал деревьев машиной — сторона сервера.
+  Tree felling by vehicles — the server side.
 
-  Удар замечает клиент водителя: физика машин есть только у него. А убрать дерево из мира
-  может только сервер — IsoTree.toppleTree начинается с if (!GameClient.client). Поэтому
-  клиент шлёт команду treeHit с координатами дерева и энергией удара, а сервер сам проверяет,
-  правдоподобно ли это, и решает по своему здоровью дерева (TreeBreak.serverTreeHit).
+  The driver's client detects the impact: only it has vehicle physics. But only the server can
+  remove a tree from the world: IsoTree.toppleTree starts with if (!GameClient.client). So the
+  client sends a treeHit command with the tree coordinates and impact energy, and the server itself
+  checks whether that is plausible and decides by its own tree health data (TreeBreak.serverTreeHit).
 ]]
 
 if not isServer() then return end

@@ -3,12 +3,12 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Кооп-сервер с ZombieBuddy, патч 2 из 2: вместо флага сборщика мусора — {@code @файл} с
- * агентом ZombieBuddy (см. {@link CoopServerAgent}). Это единственный аргумент команды
- * запуска сервера, который можно подменить, не переписывая сам запуск.
+ * Co-op server with ZombieBuddy, patch 2 of 2: in place of the garbage collector flag, an
+ * {@code @file} with the ZombieBuddy agent (see {@link CoopServerAgent}). It is the only argument
+ * of the server launch command that can be replaced without rewriting the launch itself.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.network.CoopMaster", methodName = "getGarbageCollector")
 public class Patch_coopServerAgent {

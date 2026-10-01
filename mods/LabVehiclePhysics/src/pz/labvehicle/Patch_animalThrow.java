@@ -3,15 +3,15 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Шаг полёта сбитого животного, каждый кадр — см. {@link AnimalThrow}.
+ * One flight step of a hit animal, every frame; see {@link AnimalThrow}.
  *
- * Висит на выходе {@code IsoAnimal.update()}: смещение дописывается в импульс объекта, и
- * {@code postupdate()} того же кадра прибавит его к позиции и сам разберёт стены.
+ * Sits on the exit of {@code IsoAnimal.update()}: the offset is added to the object's impulse, and
+ * {@code postupdate()} of the same frame adds it to the position and deals with walls itself.
  *
- * Пока никто не летит, стоит одну проверку volatile-флага на животное за кадр.
+ * While nothing is flying, this costs one volatile flag check per animal per frame.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.characters.animals.IsoAnimal", methodName = "update", warmUp = true)
 public class Patch_animalThrow {

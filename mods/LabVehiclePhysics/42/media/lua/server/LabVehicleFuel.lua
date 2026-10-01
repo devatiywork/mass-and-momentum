@@ -1,31 +1,31 @@
 --[[
-  Расход топлива по массе — починка ванильной формулы.
+  Fuel consumption by mass — a fix for the vanilla formula.
 
-  Ваниль (media/lua/server/Vehicles/Vehicles.lua, Vehicles.Update.GasTank):
+  Vanilla (media/lua/server/Vehicles/Vehicles.lua, Vehicles.Update.GasTank):
 
       massMultiplier = (math.abs(1000 - vehicle:getScript():getMass()) / 300) + 1
       gasMultiplier  = gasMultiplier / qualityMultiplier / massMultiplier
       newAmount      = (speedMultiplier / gasMultiplier) * SandboxVars.CarGasConsumption
       amount         = amount - elapsedMinutes * newAmount
 
-  Формула странная сама по себе: точка отсчёта ровно 1000 кг, и стоит модуль, поэтому
-  двухсоткилограммовый прицеп по ней «ест» больше легковушки. В ванили это не вылезало,
-  потому что весь автопарк был втиснут в 650..1160 кг. Как только машины получили
-  настоящие массы, множитель для 11 400 кг стал 35.7 вместо 1.0 — расход вырос в 35 раз.
+  The formula is odd in itself: the reference point is exactly 1000 kg and it takes the absolute
+  value, so by this formula a 200 kg trailer "burns" more than a passenger car. In vanilla this
+  never surfaced, because the whole fleet was squeezed into 650..1160 kg. As soon as vehicles got
+  real masses, the multiplier for 11,400 kg became 35.7 instead of 1.0: consumption grew 35-fold.
 
-  В жизни зависимость гораздо слабее: Bushmaster ест около 40 л/100 км против 10 у седана,
-  то есть вчетверо при восьмикратной разнице масс. Это примерно масса^0.55.
+  In real life the dependency is much weaker: a Bushmaster burns about 40 L/100 km against 10 for
+  a sedan, i.e. four times as much at an eightfold mass difference. That is roughly mass^0.55.
 
-  Саму функцию не переписываем — она может поменяться с обновлением игры. Вместо этого
-  зовём оригинал с поправленным elapsedMinutes: расход в ней линеен по времени, так что
-  умножение времени на отношение множителей даёт ровно нужный итог.
+  We do not rewrite the function itself: it may change with a game update. Instead we call
+  the original with an adjusted elapsedMinutes: consumption in it is linear in time, so
+  multiplying the time by the ratio of the multipliers gives exactly the desired result.
 
-  Переключатель песочницы «Расход топлива по массе» выключен — расход как в игре: та же
-  ванильная формула, но от массы машины до нашего справочника. Просто не трогать функцию
-  нельзя: от настоящей массы та же формула дала бы танку расход в 170 раз больше.
+  With the sandbox toggle "Fuel consumption by mass" off, consumption is as in the game: the same
+  vanilla formula, but applied to the vehicle's mass before our reference data. Leaving the function
+  alone will not do: with the real mass the same formula would give a tank 170 times the consumption.
 ]]
 
--- Страховка: если таблицы почему-то нет, молча ничего не делаем, а не роняем загрузку.
+-- Safeguard: if the table is somehow missing, quietly do nothing rather than break loading.
 if not Vehicles or not Vehicles.Update or not Vehicles.Update.GasTank then
     print("[LabVehiclePhysics] fuel consumption: Vehicles.Update.GasTank not found, patch skipped")
     return
@@ -42,9 +42,9 @@ local function realisticMassMultiplier(mass)
     return (mass / 1000) ^ 0.55
 end
 
--- Спрашиваем Java (LabSettings), как и все остальные переключатели: SandboxVars после правки
--- из отладочного меню одиночной игры не обновляется до перезахода. Без Java — SandboxVars,
--- а опции нет вовсе — включено, как по умолчанию.
+-- Ask Java (LabSettings), like all the other toggles: after an edit from the singleplayer debug
+-- menu, SandboxVars is not updated until the game is reloaded. Without Java, use SandboxVars;
+-- if the option does not exist at all, treat it as on, the default.
 local function fuelByMass()
     if LabVehiclePhysicsNet and LabVehiclePhysicsNet.fuelByMass then
         return LabVehiclePhysicsNet.fuelByMass()
@@ -53,7 +53,7 @@ local function fuelByMass()
     return not vars or vars.FuelByMass ~= false
 end
 
--- Масса скрипта до нашего справочника; не знаем — текущая.
+-- The script's mass before our reference data; if unknown, the current one.
 local function originalMass(script, current)
     if LabVehiclePhysicsNet and LabVehiclePhysicsNet.originalMass then
         local m = LabVehiclePhysicsNet.originalMass(script:getName())

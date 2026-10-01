@@ -1,13 +1,13 @@
 --[[
-  Серверная таблица машин — сторона сервера.
+  Server vehicle table — the server side.
 
-  Отдаёт клиентам свой vehicle-physics.cfg: по запросу при входе в игру и всем сразу,
-  когда файл поменяли. У кооп-хоста сервер — отдельный процесс, но с той же папкой
-  Zomboid, так что это файл хоста; у выделенного сервера — файл в папке сервера.
+  Sends the server's own vehicle-physics.cfg to clients: on request when a player joins, and to
+  everyone at once when the file changes. On a co-op host the server is a separate process but
+  shares the Zomboid folder, so it is the host's file; on a dedicated server, the file in its folder.
 
-  Файл проверяем раз в игровую минуту: другого периодического события на сервере нет,
-  OnTick там не срабатывает (его зовёт только IngameState). При сутках длиной в час
-  игровая минута — две с половиной секунды, при более длинных — дольше.
+  The file is checked once per game minute: the server has no other periodic event, and
+  OnTick does not fire there (only IngameState calls it). With a one-hour day a game minute
+  is two and a half seconds; with longer days it is longer.
 ]]
 
 if not isServer() then return end
@@ -34,8 +34,8 @@ end
 local function onEveryOneMinute()
     local stamp = LabVehiclePhysicsNet.serverStamp()
     if lastStamp == nil then
-        -- Первая проверка после запуска только запоминает версию: подключённых ещё нет,
-        -- а кто подключится, спросит сам.
+        -- The first check after startup only remembers the version: nobody is connected yet,
+        -- and whoever connects will ask on their own.
         lastStamp = stamp
         return
     end

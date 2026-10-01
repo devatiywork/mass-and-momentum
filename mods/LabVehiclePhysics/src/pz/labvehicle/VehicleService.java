@@ -5,23 +5,23 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Починка и заправка машины прямо в игре, по ключу {@code service} в конфиге.
+ * Repairs and refuels a vehicle right in the game, via the {@code service} key in the config.
  *
- * Зачем. Пока мы перебираем массы и мощности, машина регулярно приходит в негодность:
- * то двигатель побит, то бак пустой. Возить её в мастерскую или лезть в сейв каждый раз —
- * долго, а сейв вдобавок требует закрывать игру. Топливо там лежит внутри блоба предмета,
- * который наш разбор сейва не декодирует, так что снаружи его не поправить.
+ * Why. While we iterate over masses and power figures, the vehicle regularly becomes unusable:
+ * either the engine is damaged or the tank is empty. Driving it to a repair shop or editing the
+ * save every time is slow, and save editing also requires closing the game. In the save, the fuel
+ * sits inside an item blob our save parser does not decode, so it cannot be fixed from outside.
  *
- * Зато изнутри игры всё публично:
+ * From inside the game, though, everything is public:
  * <pre>
- * vehicle.getPartCount() / getPartByIndex(i)    — обход деталей
- * part.setCondition(100)                         — починка
- * part.setContainerContentAmount(capacity)       — заправка
+ * vehicle.getPartCount() / getPartByIndex(i)    — iterate over parts
+ * part.setCondition(100)                         — repair
+ * part.setContainerContentAmount(capacity)       — refuel
  * </pre>
  *
- * Срабатывает один раз на каждое перечитывание файла: дописал {@code service} к правилу,
- * сохранил — машина обслужена. Чтобы не обслуживать её повторно при каждой следующей
- * правке конфига, ключ надо убрать.
+ * It fires once per re-read of the file: add {@code service} to a rule, save, and the
+ * vehicle is serviced. To avoid servicing it again on every following edit of the config,
+ * remove the key.
  */
 public final class VehicleService {
 
@@ -38,7 +38,7 @@ public final class VehicleService {
     public static Method mTransmitItem;
     public static Method mTransmitCondition;
     public static Boolean onClient;
-    /** Уже обслуженные в этом поколении конфига: имя машины + номер поколения. */
+    /** Already serviced in this config generation: vehicle name + generation number. */
     public static final Set<String> DONE = new HashSet<String>();
 
     private VehicleService() {
@@ -49,11 +49,11 @@ public final class VehicleService {
             return;
         }
         try {
-            // Обслуживание меняет состояние мира, значит делает его сервер.
-            // На клиенте наша запись всё равно перетирается серверным состоянием,
-            // а до этого успевает разойтись с ним: сервер и клиент видят у бака
-            // разную ёмкость (95 против 33), потому что предмет-бак установлен
-            // не на обеих сторонах.
+            // Servicing changes world state, so the server does it.
+            // On the client our write is overwritten by the server state anyway,
+            // and before that it has time to diverge from it: the server and the client
+            // see different tank capacities (95 vs 33) because the tank item is not
+            // installed on both sides.
             if (isClient()) {
                 return;
             }
@@ -90,7 +90,7 @@ public final class VehicleService {
         }
     }
 
-    /** true, если мы на клиенте: там менять состояние мира нельзя. */
+    /** true if we are on the client, where world state must not be changed. */
     public static boolean isClient() {
         if (onClient == null) {
             try {
@@ -103,7 +103,7 @@ public final class VehicleService {
         return onClient.booleanValue();
     }
 
-    /** Пометить деталь как изменённую, чтобы сервер разослал её клиентам. */
+    /** Marks a part as changed so the server sends it out to the clients. */
     public static void transmit(Object vehicle, Object part, Method m) {
         if (m == null) {
             return;
@@ -133,10 +133,10 @@ public final class VehicleService {
                 mSetCondition = part.getClass().getMethod("setCondition", int.class);
                 mGetPartId = part.getClass().getMethod("getId");
                 mGetContainerCapacity = part.getClass().getMethod("getContainerCapacity");
-                // Трёхаргументная перегрузка с force=true. Двухаргументная обрезает
-                // количество по getMaxCapacity() САМОГО ПРЕДМЕТА, минуя наш патч на
-                // getContainerCapacity(). У танка предмет-бак на 33 литра, поэтому
-                // вместо 659 заливалось 33 — то есть практически ничего.
+                // The three-argument overload with force=true. The two-argument one clamps
+                // the amount to getMaxCapacity() of THE ITEM ITSELF, bypassing our patch on
+                // getContainerCapacity(). The battle tank's fuel-tank item holds 33 litres, so
+                // 33 went in instead of 659, i.e. practically nothing.
                 mSetContainerContentAmount = part.getClass().getMethod(
                         "setContainerContentAmount", float.class, boolean.class, boolean.class);
             }
@@ -151,14 +151,14 @@ public final class VehicleService {
             int cap = ((Integer) mGetContainerCapacity.invoke(tank)).intValue();
             if (cap > 0) {
                 mSetContainerContentAmount.invoke(tank, Float.valueOf(cap), Boolean.TRUE, Boolean.FALSE);
-                // Количество топлива лежит в modData детали и само по сети не уезжает.
+                // The fuel amount lives in the part's modData and is not networked by itself.
                 transmit(vehicle, tank, mTransmitModData);
                 transmit(vehicle, tank, mTransmitItem);
                 fuel = "fuel tank filled to " + cap;
             }
         }
 
-        // Колёса: помимо состояния им нужно давление, иначе машина едет на ободах.
+        // Tyres: besides condition they need pressure, otherwise the vehicle runs on its rims.
         String[] tires = {"TireFrontLeft", "TireFrontRight", "TireRearLeft", "TireRearRight"};
         int pumped = 0;
         for (int i = 0; i < tires.length; i++) {

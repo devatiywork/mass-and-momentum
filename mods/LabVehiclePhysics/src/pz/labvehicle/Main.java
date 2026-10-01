@@ -3,46 +3,46 @@ package pz.labvehicle;
 public class Main {
 
     /**
-     * Классы, которые надо загрузить до прохода патчера.
+     * Classes that must be loaded before the patcher pass.
      *
-     * ZombieBuddy успешно патчит только те классы, которые на момент его прохода уже
-     * загружены — в логе у них появляется пара строк «patching …» и «Transformed: …
-     * (retransformed)». Классы, до которых игра ещё не добралась, он помечает как
-     * «warming up class: …», но патч к ним не применяется: ни одной строки «patching»
-     * за прогревом не следует, ни с warmUp, ни без него.
+     * ZombieBuddy successfully patches only the classes that are already loaded at the
+     * time of its pass: for those the log shows a pair of lines, "patching …" and "Transformed: …
+     * (retransformed)". Classes the game has not reached yet get marked as
+     * "warming up class: …", but the patch is never applied to them: no "patching" line
+     * follows the warm-up, with or without warmUp.
      *
-     * Из-за этого молча не работали два патча подряд — таблица масс на
-     * VehicleScript.Loaded() и множитель тяги на CarController.checkTire. Ошибок при
-     * этом не было нигде: патч числится найденным, просто никогда не вызывается.
+     * Because of this, two patches in a row silently did nothing: the mass table on
+     * VehicleScript.Loaded() and the thrust multiplier on CarController.checkTire. There were
+     * no errors anywhere: the patch counts as found, it just never gets called.
      *
-     * Порядок в логе подсказывает лечение:
+     * The order in the log suggests the cure:
      * <pre>
      * [ZB] trying to load pz.labvehicle.Main
-     * [LabVehiclePhysics] loaded ...      ← этот метод
+     * [LabVehiclePhysics] loaded ...      ← this method
      * [ZB] Scanned 22 classes in package pz.labvehicle
-     * [ZB] Found patch class: ...         ← проход патчера
+     * [ZB] Found patch class: ...         ← the patcher pass
      * </pre>
-     * main() выполняется раньше прохода. Значит достаточно тронуть классы здесь —
-     * и к проходу они окажутся загруженными наравне с BaseVehicle.
+     * main() runs before the pass. So it is enough to touch the classes here, and by
+     * the time of the pass they are loaded just like BaseVehicle.
      */
     public static final String[] PRELOAD = {
         "zombie.core.physics.CarController",
         "zombie.scripting.objects.VehicleScript",
-        // Наезд на животных: урон в одиночной игре и на сервере.
+        // Animal hits: damage in singleplayer and on the server.
         "zombie.characters.animals.IsoAnimal",
         "zombie.network.fields.hit.VehicleHitField",
-        // Повал деревьев машиной.
+        // Tree felling by vehicles.
         "zombie.iso.objects.IsoTree",
-        // Труп там, где упало тело, в сети: хозяин зомби и момент «лёг».
+        // Corpse where the body fell, in multiplayer: the zombie's owner and the "landed" moment.
         "zombie.popman.NetworkZombieManager",
         "zombie.ai.states.ZombieOnGroundState",
-        // Рэгдолл у того, кто не хозяин тела: сообщения хозяина и труп с сервера.
+        // Ragdoll on a non-owner client: the owner's messages and the corpse from the server.
         "zombie.characters.NetworkZombieAI",
         "zombie.network.packets.character.DeadCharacterPacket",
-        // Растяжка на NaN: пакет физики машины и обновление игрока.
+        // NaN tripwire: the vehicle physics packet and the player update.
         "zombie.network.packets.vehicle.VehiclePhysicsPacket",
         "zombie.characters.IsoPlayer",
-        // Кооп-сервер с ZombieBuddy: запуск сервера из меню «Хостинг».
+        // Co-op server with ZombieBuddy: starting the server from the "Host" menu.
         "zombie.network.CoopMaster",
     };
 

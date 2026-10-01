@@ -3,13 +3,13 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Клиент: касание тела с машиной, за рулём которой другой игрок, проверяется честно, а не
- * «всегда да» — иначе рэгдолл от чужой машины не кончается ({@link RemoteRagdoll}).
+ * Client: contact between a body and a vehicle driven by another player is checked for real, not
+ * "always yes"; otherwise a ragdoll from someone else's vehicle never ends ({@link RemoteRagdoll}).
  *
- * {@code BaseVehicle.isCollided} зовёт только {@code RagdollController.vehicleCollision}: касание
- * продлевает симуляцию тела. Для своего водителя ваниль и так проверяет геометрией — не трогаем.
+ * Only {@code RagdollController.vehicleCollision} calls {@code BaseVehicle.isCollided}: contact
+ * extends the body's simulation. For a local driver vanilla checks geometry anyway; left as is.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в метод игры — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines exit() into the game's method: public members only, no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "isCollided", warmUp = true)
 public class Patch_remoteVehicleContact {

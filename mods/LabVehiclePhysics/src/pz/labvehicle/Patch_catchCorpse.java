@@ -3,14 +3,14 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Надёжный перехват трупа в момент создания.
+ * Reliable capture of the corpse at the moment it is created.
  *
- * Предыдущий подход — читать поле IsoGameCharacter.diedBody на каждом шаге рэгдолла —
- * почти не работал: логи показали 0-3 попадания на 78-257 обращений. Причина в том,
- * что VirtualZombieManager возвращает объект зомби в пул и зовёт clearDiedBody(),
- * так что поле видно буквально один кадр. Высматривать его бессмысленно.
+ * The previous approach, reading the IsoGameCharacter.diedBody field on every ragdoll step,
+ * barely worked: the logs showed 0-3 hits per 78-257 reads. The reason is that
+ * VirtualZombieManager returns the zombie object to the pool and calls clearDiedBody(),
+ * so the field is visible for literally one frame. Watching for it is pointless.
  *
- * Здесь мы перехватываем сам метод, который труп создаёт:
+ * Here we intercept the very method that creates the corpse:
  * <pre>
  * private final IsoDeadBody becomeCorpse() {
  *     if (this.diedBody == null) {
@@ -20,9 +20,9 @@ import me.zed_0xff.zombie_buddy.Patch;
  *     return this.diedBody;
  * }
  * </pre>
- * и кладём пару «персонаж -> труп» в кэш Patch_corpseFollowsRagdoll ровно в тот момент,
- * когда труп появился. Дальше рэгдолл тащит труп за собой, даже когда игра ссылку уже
- * обнулила.
+ * and put the "character -> corpse" pair into the Patch_corpseFollowsRagdoll cache at the exact
+ * moment the corpse appears. From then on the ragdoll drags the corpse along, even after the
+ * game has nulled the reference.
  */
 @Patch(className = "zombie.characters.IsoGameCharacter", methodName = "becomeCorpse", warmUp = true)
 public class Patch_catchCorpse {

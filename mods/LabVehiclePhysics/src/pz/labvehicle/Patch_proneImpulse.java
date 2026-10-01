@@ -5,48 +5,48 @@ import java.lang.reflect.Field;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Этап 1.5: подбрасывание машины на телах под колёсами.
+ * Stage 1.5: the vehicle getting tossed up by bodies under its wheels.
  *
- * Ваниль, BaseVehicle.testCollisionWithProneCharacter — когда колесо наезжает на лежащего:
+ * Vanilla, BaseVehicle.testCollisionWithProneCharacter, when a wheel runs over someone lying down:
  * <pre>
- * impulse.impulse.set(0, 1, 0);                                  // строго ВВЕРХ
+ * impulse.impulse.set(0, 1, 0);                                  // strictly UP
  * float speedMult = max(speedKmH, 10) / 10;
  * impulse.impulse.mul(0.065F * getFudgedMass() * speedMult * corpseSizeMul);
- * impulse.relPos.set(wheelPos - vehiclePos);                     // приложено В ТОЧКЕ КОЛЕСА
+ * impulse.relPos.set(wheelPos - vehiclePos);                     // applied AT THE WHEEL
  * impulse.enable = true; impulse.applied = false;
  * </pre>
- * и затем BaseVehicle.applyAllImpulsesFromProneCharacters:
+ * and then BaseVehicle.applyAllImpulsesFromProneCharacters:
  * <pre>
  * float limit = getFudgedMass() * 0.15F;
- * if (force.lengthSquared() > limit*limit) force.mul(limit / force.length());   // потолок ТОЛЬКО на силу
+ * if (force.lengthSquared() > limit*limit) force.mul(limit / force.length());   // cap on the force ONLY
  * Bullet.applyCentralForceToVehicle(id, force * 30.0F);
- * Bullet.applyTorqueToVehicle(id, torque * 30.0F);                             // момент НЕ ограничен
+ * Bullet.applyTorqueToVehicle(id, torque * 30.0F);                             // torque NOT capped
  * </pre>
  *
- * Два дефекта:
+ * Two defects:
  *
- * 1. Импульс создаётся ПОКАДРОВО (из апдейта тела), а применяется на физическом шаге,
- *    которых ровно 100 в секунду. На 30 FPS выходит 30 приложений в секунду, на 240 — до 100.
- *    Итого вчетверо больше подъёмной силы: машину колбасит тем сильнее, чем выше FPS.
- *    Лечим домножением на реальную длительность кадра, нормированную к 1/30 c.
+ * 1. The impulse is created PER FRAME (from the body's update) but applied on the physics step,
+ *    which runs exactly 100 times a second. At 30 FPS that is 30 applications a second, at 240
+ *    up to 100. The net result is four times the lift: the higher the FPS, the harder the vehicle
+ *    bucks. The fix multiplies by the real frame duration, normalised to 1/30 s.
  *
- * 2. Сила направлена вверх, но приложена в точке КОЛЕСА, а не в центре масс — отсюда момент
- *    вращения и желание перевернуться. Ограничитель накинут только на силу; момент режется
- *    лишь заодно. Укорачиваем плечо (relPos), оставляя подъём нетронутым: машина
- *    подпрыгивает, но не кренится.
+ * 2. The force points up but is applied at the WHEEL rather than at the centre of mass, hence
+ *    the torque and the urge to roll over. The limiter only covers the force; the torque is cut
+ *    merely as a side effect. We shorten the lever arm (relPos) and leave the lift untouched:
+ *    the vehicle hops but does not tilt.
  *
- * Перегрузка testCollisionWithProneCharacter(chr, doSound, out) делегирует длинной, поэтому
- * патч по имени срабатывает дважды — считаем вложенность и масштабируем только на выходе
- * из самого внешнего вызова.
+ * The overload testCollisionWithProneCharacter(chr, doSound, out) delegates to the long one, so
+ * the by-name patch fires twice: we count the nesting depth and scale only on exit from the
+ * outermost call.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "testCollisionWithProneCharacter", warmUp = true)
 public class Patch_proneImpulse {
 
     @Patch.OnEnter
     public static void enter() {
-        // Вложенность считаем всегда, а предохранитель и переключатель проверяем на выходе.
-        // Раньше проверка стояла здесь: при закрытом предохранителе счётчик не рос, и выход
-        // видел ноль — масштабировал импульсы, да ещё дважды, по разу на каждую перегрузку.
+        // The nesting depth is always counted; the safety gate and the toggle are checked on exit.
+        // The check used to live here: with the safety gate closed the counter did not grow, so
+        // exit saw zero and scaled the impulses, twice at that, once for each overload.
         Impl.depth++;
     }
 
@@ -56,13 +56,13 @@ public class Patch_proneImpulse {
     }
 
     public static final class Impl {
-        /** Доля плеча, которая остаётся: 1.0 — как в ванили, 0 — совсем без крена. */
+        /** Fraction of the lever arm that remains: 1.0 is vanilla, 0 means no tilt at all. */
         public static final float LEVER = 0.45f;
         public static final float REFERENCE_HZ = 30.0f;
         public static final float FRAME_MIN = 0.02f;
         public static final float FRAME_MAX = 2.0f;
 
-        /** Глубина вложенности перегрузок (игра зовёт их из главного потока). */
+        /** Nesting depth of the overloads (the game calls them from the main thread). */
         public static int depth = 0;
 
         public static volatile boolean broken = false;

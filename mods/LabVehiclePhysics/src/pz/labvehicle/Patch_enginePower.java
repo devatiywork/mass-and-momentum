@@ -6,41 +6,41 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Мощность двигателя и тормоза — на лету, без перезапуска и без порчи сейва.
+ * Engine power and brakes on the fly, without a restart and without polluting the save.
  *
- * Почему не через мощность двигателя напрямую. Очевидный путь — подменить
- * {@code BaseVehicle.getEnginePower()} — не годится: его читает не только физика, но и
- * сериализация.
+ * Why not through the engine power directly. The obvious route, overriding
+ * {@code BaseVehicle.getEnginePower()}, does not work: it is read not only by the physics but
+ * also by serialization.
  * <pre>
- * // BaseVehicle, запись машины
+ * // BaseVehicle, saving the vehicle
  * output.putInt(this.getEnginePower());
- * // VehicleEngine, сетевой пакет
+ * // VehicleEngine, network packet
  * b.putInt(this.getVehicle().getEnginePower());
  * </pre>
- * Завышенное число ушло бы в сейв и в сеть, и осталось бы там навсегда — даже после
- * выключения мода. Плюс для уже существующих машин мощность и так берётся из сейва,
- * а не из скрипта, поэтому правка скрипта на них всё равно не подействовала бы.
+ * The inflated number would go into the save and over the network, and stay there forever, even
+ * after the mod is turned off. Besides, for existing vehicles the power is taken from the save
+ * anyway, not from the script, so editing the script would not affect them regardless.
  *
- * Поэтому цепляемся к последней точке перед применением:
+ * So we hook into the last point before the forces are applied:
  * <pre>
  * // CarController.update()
  * BulletVariables bv = bulletVariables.set(vehicleObject, engineForce, brakingForce, steering);
- * this.checkTire(bv);              // ← сюда
+ * this.checkTire(bv);              // ← here
  * this.engineForce = bv.engineForce;
  * ...
  * Bullet.controlVehicle(vehicleId, this.engineForce, this.brakingForce, this.vehicleSteering);
  * </pre>
- * {@code checkTire} и сам занимается ровно этим — делит тягу и торможение за спущенные
- * колёса. Мы просто домножаем те же два поля после него. В сейв не попадает ничего.
+ * {@code checkTire} itself does exactly this kind of work: it divides thrust and braking for flat
+ * tyres. We just multiply the same two fields after it. Nothing ends up in the save.
  *
- * Значения берутся из файла и перечитываются на ходу: {@code powerMul} и {@code brakeMul},
- * число либо {@code auto}. {@code auto} — это отношение новой массы к ванильной, то есть
- * разгон и тормозной путь остаются как у стоковой машины, несмотря на настоящий вес.
+ * The values come from the file and are re-read on the fly: {@code powerMul} and {@code brakeMul},
+ * a number or {@code auto}. {@code auto} is the ratio of the new mass to the vanilla one, so
+ * acceleration and braking distance stay as on the stock vehicle despite the real weight.
  *
- * Сверху — общий множитель мощности из песочницы ({@link LabSettings#powerMul}): он действует
- * на все машины, включая те, для которых правил нет, и не трогает тормоза.
+ * On top comes the global power multiplier from the sandbox ({@link LabSettings#powerMul}): it
+ * applies to all vehicles, including those that have no rules, and does not touch the brakes.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в checkTire — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into checkTire: public members only, no lambdas.
  */
 @Patch(className = "zombie.core.physics.CarController", methodName = "checkTire", warmUp = true)
 public class Patch_enginePower {
@@ -58,24 +58,24 @@ public class Patch_enginePower {
         public static Field fBrakingForce;
         public static Method mScriptName;
         /**
-         * Какие сочетания «машина — множители» уже напечатаны. Сравнение с последним
-         * напечатанным, как было раньше, при двух машинах сразу печатает каждый кадр —
-         * на сервере, где едут несколько игроков, это случилось бы сразу. Так уже
-         * заваливали лог масса и бак.
+         * Which vehicle/multiplier combinations have already been printed. Comparing with the
+         * last printed one, as before, prints every frame as soon as there are two vehicles;
+         * on a server with several players driving, that would happen immediately. This is how
+         * the mass and tank lines already flooded the log.
          */
         public static final java.util.Set<String> LOGGED =
                 java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
 
         /**
-         * Диагностика: на каком досрочном выходе разворачивается метод.
+         * Diagnostics: at which early exit the method bails out.
          *
-         * Строка "power and brakes" не печаталась НИ РАЗУ, хотя ZombieBuddy рапортует
-         * "patching zombie.core.physics.CarController.checkTire" и ошибок нет. Значит
-         * тело выполняется, но выходит раньше применения множителей — и тяга с тормозами
-         * не применяются вообще, ни у одной машины.
+         * The "power and brakes" line was NEVER printed, even though ZombieBuddy reports
+         * "patching zombie.core.physics.CarController.checkTire" and there are no errors. So
+         * the body runs but exits before the multipliers are applied, and thrust and brakes
+         * are not applied at all, on any vehicle.
          *
-         * Каждая причина печатается один раз, чтобы не залить лог: метод зовётся
-         * каждый кадр на каждую машину.
+         * Each reason is printed once so as not to flood the log: the method is called
+         * every frame for every vehicle.
          */
         public static final java.util.Set<String> BAILED =
                 java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
@@ -86,7 +86,7 @@ public class Patch_enginePower {
             }
         }
 
-        /** Отличает «advice не выполняется вовсе» от «выполняется и выходит раньше». */
+        /** Tells "the advice does not run at all" apart from "it runs and exits early". */
         public static volatile boolean sawFirstCall = false;
 
         public static void scale(Object controller, Object bv) {
@@ -105,8 +105,8 @@ public class Patch_enginePower {
             }
             try {
                 VehicleCfg.reloadIfNeeded();
-                // Общий множитель мощности из песочницы — на все машины, и на те, у которых
-                // правил нет. Тормоза он не трогает.
+                // The global power multiplier from the sandbox applies to all vehicles, even those
+                // that have no rules. It does not touch the brakes.
                 float global = LabSettings.powerMul();
                 boolean globalOn = Math.abs(global - 1.0f) > 0.001f;
                 if (!VehicleCfg.hasTuning && !globalOn) {
@@ -141,8 +141,8 @@ public class Patch_enginePower {
                 float boost = 1.0f;
                 float speedKmh = fSpeed.getFloat(controller);
                 if (rule != null) {
-                    // Последний момент, когда ванильную массу ещё видно, если правило
-                    // до скрипта не дошло. Без этого brakeMul=auto молча вырождается в 1.0.
+                    // The last moment the vanilla mass is still visible, in case the rule never
+                    // reached the script. Without this, brakeMul=auto silently degenerates to 1.0.
                     VehicleCfg.noteVanillaMassFromVehicle(vehicle, name);
                     ruled = VehicleCfg.powerMultiplier(rule, name);
                     brake = VehicleCfg.multiplier(rule.brakeMul, rule, name);

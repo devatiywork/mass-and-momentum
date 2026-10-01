@@ -3,22 +3,22 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Наезд на животное, сторона машины: один честный импульс вместо стены.
+ * Vehicle hitting an animal, vehicle side: one physically correct impulse instead of a wall.
  *
- * Ваниль тормозит машину об животное импульсом {@code M * 7 * min(v,15)/15 * |dot|}
- * КАЖДЫЙ кадр контакта плюс лишним {@code applyImpulseFromHitObject(this, 1.0F)} тем же
- * кадром. Масса машины сокращается, веса животного нет, повторы без бюджета — кот
- * останавливал двенадцатитонный броневик. Разбор — {@code backlog.md} §3a.
+ * Vanilla brakes the vehicle against an animal: an impulse of {@code M * 7 * min(v,15)/15 * |dot|}
+ * on EVERY frame of contact, plus an extra {@code applyImpulseFromHitObject(this, 1.0F)} on the
+ * same frame. The vehicle mass cancels out, the animal's weight is ignored, repeats have no budget:
+ * a cat used to stop a twelve-tonne armoured car. Analysis: {@code backlog.md} §3a.
  *
- * Здесь: на один удар — один импульс, по приведённой массе (формула — {@link AnimalImpact}).
- * Повторы того же удара и толчки упавшего животного отбрасываются. Остальные вызовы
- * {@code applyImpulseFromHitObject} — не животные — идут как в ванили.
+ * Here: one impulse per impact, using the reduced mass (the formula is in {@link AnimalImpact}).
+ * Repeats of the same impact and nudges from a fallen animal are dropped. All other calls of
+ * {@code applyImpulseFromHitObject}, the non-animal ones, go through as in vanilla.
  *
- * Работает там, где считается машина: у клиента водителя и в одиночной игре. На сервере
- * ваниль импульсы от животных не прикладывает вовсе ({@code !GameServer.server} в hitAnimal).
+ * Works where the vehicle is simulated: on the driver's client and in singleplayer. On the server
+ * vanilla does not apply impulses from animals at all ({@code !GameServer.server} in hitAnimal).
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "applyImpulseFromHitObject", warmUp = true)
 public class Patch_animalImpulse {
@@ -36,18 +36,18 @@ public class Patch_animalImpulse {
     }
 
     public static final class Impl {
-        /** Вернуть это — значит пропустить ванильный импульс. */
+        /** Returning this means: skip the vanilla impulse. */
         public static final float SKIP = -1.0f;
 
         public static volatile boolean broken = false;
         public static int logged = 0;
-        /** Сквозная нумерация ударов в логе; applied/skipped сбрасываются каждые 15 с. */
+        /** Running hit number for the log; applied/skipped are reset every 15 s. */
         public static long total = 0L;
         public static long applied = 0L;
         public static long skipped = 0L;
         public static long lastReportNanos = 0L;
 
-        /** @return новое значение mul или SKIP. */
+        /** @return the new value of mul, or SKIP. */
         public static float rewrite(Object vehicle, Object obj, float vanilla) {
             if (!LabGate.active()) {
                 return vanilla;
@@ -56,9 +56,9 @@ public class Patch_animalImpulse {
                 return vanilla;
             }
             try {
-                // Кусты с CarSlowFactor в одиночной игре приходят сюда же, из IsoObject.Collision:
-                // импульс M * скорость * CarSlowFactor / 100 — масса снова сокращается. Их
-                // торможение теперь считает VegetationDrag, ванильный импульс не нужен.
+                // Bushes with CarSlowFactor come here too in singleplayer, via IsoObject.Collision:
+                // impulse M * speed * CarSlowFactor / 100, and the mass cancels out again. Their
+                // braking is now computed by VegetationDrag; the vanilla impulse is not needed.
                 if (VegetationDrag.skipsHitObjectImpulse(vehicle, obj)) {
                     skipped++;
                     return SKIP;
@@ -78,8 +78,8 @@ public class Patch_animalImpulse {
                 }
                 float v = AnimalImpact.closingSpeed(vehicle, obj);
                 if (v < AnimalImpact.MIN_SPEED) {
-                    // Не наезжаем, а касаемся или отъезжаем. Эпизод не закрываем:
-                    // настоящий удар может прийти следующим кадром.
+                    // Not a hit, just a touch or pulling away. The episode stays open:
+                    // the real impact may come on the next frame.
                     skipped++;
                     report();
                     return SKIP;

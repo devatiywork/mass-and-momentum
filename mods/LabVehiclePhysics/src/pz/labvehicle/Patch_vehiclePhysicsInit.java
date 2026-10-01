@@ -3,31 +3,31 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Гарантия, что параметры подвески зашиты ДО создания первой машины в физике.
+ * Makes sure the suspension parameters are baked in BEFORE the first vehicle enters physics.
  *
- * Предыстория. Правильная точка — {@code VehicleScript.Loaded()}, но ZombieBuddy этот класс
- * не перехватывает: в логе есть только строка прогрева, а «patching … with 1 advice(s)»
- * за ней не появляется ни с {@code warmUp}, ни без него. Поэтому таблицу масс приходится
- * применять самим, обходом {@code ScriptManager.getAllVehicleScripts()}.
+ * Background. The right hook point is {@code VehicleScript.Loaded()}, but ZombieBuddy does not
+ * intercept that class: the log has only the warm-up line, and no "patching … with 1 advice(s)"
+ * follows it, with or without {@code warmUp}. So we have to apply the mass table ourselves, by
+ * walking {@code ScriptManager.getAllVehicleScripts()}.
  *
- * Первая версия запускала этот обход с задержкой, из чего вышла ровно та проблема, которую
- * он должен был решить. Цепочка создания машины такая:
+ * The first version ran this walk with a delay, which produced exactly the problem it was meant
+ * to solve. The vehicle creation chain is:
  * <pre>
  * BaseVehicle.createPhysics()
  *   └── new CarController(vehicle)
  *          └── Bullet.addVehicle(id, x, y, z, rot…, script.getFullName())
  * </pre>
- * {@code addVehicle} строит машину по ИМЕНИ уже зарегистрированного скрипта, а параметры
- * этого скрипта (жёсткость, ход и длина подвески) уходят в нативную часть один раз, через
- * {@code defineVehicleScript}. Значит переписать их нужно до первого {@code addVehicle},
- * иначе машина создастся со старой подвеской и переопределять будет поздно: повторный
- * {@code defineVehicleScript} действует только на машины, созданные после него.
+ * {@code addVehicle} builds the vehicle by the NAME of an already registered script, and that
+ * script's parameters (suspension stiffness, travel and length) go to the native side once, via
+ * {@code defineVehicleScript}. So they must be rewritten before the first {@code addVehicle};
+ * otherwise the vehicle is created with the old suspension and it is too late to redefine: a
+ * repeated {@code defineVehicleScript} affects only vehicles created after it.
  *
- * Масса этим не затрагивается — её игра отдаёт в Bullet каждый кадр отдельным вызовом
- * {@code setVehicleMass}, поэтому её можно менять когда угодно. А вот подвеска — только здесь.
+ * Mass is not affected by this: the game passes it to Bullet every frame in a separate call,
+ * {@code setVehicleMass}, so it can be changed at any time. The suspension, though, only here.
  *
- * ВАЖНО: тело enter() встраивается ByteBuddy в createPhysics — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of enter() into createPhysics: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "createPhysics", warmUp = true)
 public class Patch_vehiclePhysicsInit {

@@ -5,33 +5,33 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Этап 1, патч 1 из 2: масса персонажа в формуле торможения машины.
+ * Stage 1, patch 1 of 2: the character's mass in the vehicle braking formula.
  *
- * Ваниль: {@code IsoGameCharacter.getMass() { return 100.0F; }} — хардкод для всех.
- * Единственный потребитель этого метода во всей игре — {@code BaseVehicle.applyImpulseFromHitPedestrian}:
+ * Vanilla: {@code IsoGameCharacter.getMass() { return 100.0F; }}, hardcoded for everyone.
+ * The only consumer of this method in the whole game is {@code BaseVehicle.applyImpulseFromHitPedestrian}:
  * <pre>impulseStrength = -dot * characterMass * (isProne ? 0.2 : 0.8) * vehicleSpeed;</pre>
- * Проверено поиском по декомпилированному исходнику: других вызовов нет, поэтому правка
- * не задевает ничего, кроме наезда.
+ * Verified by searching the decompiled source: there are no other calls, so the change
+ * affects nothing but vehicle hits.
  *
- * Делаем две вещи:
+ * We do two things:
  *
- * 1. РАЗБРОС ПО ТЕЛОСЛОЖЕНИЮ. Поля веса тела у зомби в сейве нет, поэтому берём
- *    детерминированный разброс 0.75..1.35 от личности персонажа (стабилен в пределах
- *    сессии). Среднее намеренно оставлено равным 1.0: на этом этапе мы НЕ меняем силу
- *    торможения в среднем, чтобы эффект остальных правок был виден чисто.
+ * 1. SPREAD BY PHYSIQUE. Zombies have no body-weight field in the save, so we take a
+ *    deterministic spread of 0.75..1.35 from the character's identity (stable within a
+ *    session). The mean is deliberately left at 1.0: at this stage we do NOT change the
+ *    braking force on average, so that the effect of the other changes shows cleanly.
  *
- * 2. ЧЕСТНОЕ ВРЕМЯ КАДРА. Импульс кладётся в список каждый кадр отрисовки, а разгребается
- *    с зашитой константой 30 (в игре для этого даже заведена переменная fpsScale, которую
- *    забыли использовать). Из-за этого на 240 FPS в машину прилетает в 8 раз больше
- *    торможения в секунду, чем на 30. Домножаем вклад кадра на его реальную длительность,
- *    нормированную к 1/30 c: на 30 FPS коэффициент 1.0, на 240 — 0.125. Суммарный импульс
- *    за секунду становится одинаковым при любом FPS и равным ванильному на 30 FPS.
+ * 2. HONEST FRAME TIME. The impulse is queued every render frame but drained with
+ *    a hardcoded constant of 30 (the game even has an fpsScale variable for this, which
+ *    nobody remembered to use). Because of that, at 240 FPS the vehicle receives 8 times more
+ *    braking per second than at 30. We multiply each frame's contribution by its real duration,
+ *    normalised to 1/30 s: the factor is 1.0 at 30 FPS and 0.125 at 240. The total impulse
+ *    per second becomes the same at any FPS and equal to vanilla at 30 FPS.
  *
- * Математически это тождественно умножению самого импульса — просто точка приложения
- * удобнее: getMass() короткий и без побочных потребителей.
+ * Mathematically this is identical to multiplying the impulse itself; the hook point is just
+ * more convenient: getMass() is short and has no other consumers.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в getMass(), поэтому только public-члены
- * и никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into getMass(), so public members only
+ * and no lambdas.
  */
 @Patch(className = "zombie.characters.IsoGameCharacter", methodName = "getMass", warmUp = true)
 public class Patch_getMass {
@@ -42,12 +42,12 @@ public class Patch_getMass {
     }
 
     public static final class Impl {
-        /** Границы разброса массы. Среднее ≈ 1.0 — средняя сила торможения не меняется. */
+        /** Mass spread bounds. Mean ≈ 1.0, so the average braking force does not change. */
         public static final float SPREAD_MIN = 0.75f;
         public static final float SPREAD_MAX = 1.35f;
-        /** Эталонная частота, под которую откалибрована ваниль. */
+        /** Reference rate that vanilla is calibrated for. */
         public static final float REFERENCE_HZ = 30.0f;
-        /** Ограничители коэффициента кадра: защита от пауз, загрузок и фризов. */
+        /** Frame factor clamps: protection against pauses, loading and freezes. */
         public static final float FRAME_MIN = 0.02f;
         public static final float FRAME_MAX = 2.0f;
 
@@ -82,7 +82,7 @@ public class Patch_getMass {
             }
         }
 
-        /** Длительность кадра, нормированная к 1/30 с. */
+        /** Frame duration normalised to 1/30 s. */
         public static float frameFactor() throws Exception {
             if (gtRealSeconds == null) {
                 Class<?> gt = Class.forName("zombie.GameTime");
@@ -101,7 +101,7 @@ public class Patch_getMass {
             return f > FRAME_MAX ? FRAME_MAX : f;
         }
 
-        /** Детерминированный разброс массы для конкретного персонажа. */
+        /** Deterministic mass spread for a specific character. */
         public static float spreadFor(Object chr) {
             int h = System.identityHashCode(chr);
             h ^= (h >>> 16);

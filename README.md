@@ -53,8 +53,8 @@ If you are reading the code to decide whether to trust it:
   ([LabGate.java](mods/LabVehiclePhysics/src/pz/labvehicle/LabGate.java)), so it gives no advantage
   anywhere it was not invited.
 
-Code comments and the docs in `docs/` are in Russian, my native language. The code itself is plain
-Java and Lua.
+The in-game texts come in English and Russian (`Translate/EN`, `Translate/RU`); code comments and
+docs are in English.
 
 ## Requirements
 
@@ -86,9 +86,10 @@ Jar files never match byte for byte because of timestamps, so compare the classe
 ## Docs
 
 - [docs/patches.md](docs/patches.md): every hooked game method
-- [docs/vehicle-config.md](docs/vehicle-config.md): the `vehicle-physics.cfg` format (Russian)
-- [docs/vehicle-api.md](docs/vehicle-api.md): Lua API for vehicle mod authors (Russian), with an
-  example in [examples/LabVehicleAuthorExample](examples/LabVehicleAuthorExample)
+- [docs/vehicle-config.md](docs/vehicle-config.md): the `vehicle-physics.cfg` format and the
+  vehicle table
+- [docs/vehicle-api.md](docs/vehicle-api.md): Lua API for vehicle mod authors, with an example in
+  [examples/LabVehicleAuthorExample](examples/LabVehicleAuthorExample)
 
 ## License
 

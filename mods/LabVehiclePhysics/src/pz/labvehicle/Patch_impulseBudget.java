@@ -6,25 +6,25 @@ import java.util.WeakHashMap;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Этап 1.6: один зомби — один импульс.
+ * Stage 1.6: one zombie, one impulse.
  *
- * Ваниль зовёт BaseVehicle.applyImpulseFromHitPedestrian КАЖДЫЙ КАДР, пока длится контакт
- * (а контакт в VehiclePedestrianContactTracking держится до 3.5 секунд), и каждый раз
- * списывает с машины полный импульс m·v·0.8. Физически так нельзя: тело забирает импульс
- * ровно один раз — пока разгоняется до скорости машины. Дальше забирать нечего.
- * Отсюда «упёрся в одного зомби и встал».
+ * Vanilla calls BaseVehicle.applyImpulseFromHitPedestrian EVERY FRAME while the contact lasts
+ * (and VehiclePedestrianContactTracking keeps a contact for up to 3.5 seconds), and each time
+ * deducts the full impulse m·v·0.8 from the vehicle. Physically that is wrong: a body takes
+ * momentum exactly once, while it is being accelerated to the vehicle's speed. Then there is
+ * nothing left to take. Hence the "ran into one zombie and stopped dead" effect.
  *
- * Даём каждому персонажу БЮДЖЕТ на эпизод контакта и перестаём списывать, когда он исчерпан.
+ * We give each character a BUDGET per contact episode and stop deducting once it is spent.
  *
- * Почему бюджет измеряется временем. Игра применяет накопленное как силу с множителем 30
- * на одном шаге Bullet в 10 мс, то есть за одно применение доходит 30 * 0.01 = 0.3 от
- * положенного импульса. Значит полный импульс набирается примерно за 1/0.3 = 3.33 кадра
- * по 1/30 с, то есть за 0.111 секунды контакта. Это и есть бюджет; он в секундах, поэтому
- * не зависит от FPS — на 240 кадрах он просто растянется на больше кадров с меньшим вкладом
- * каждого (вклад нормирован патчем массы).
+ * Why the budget is measured in time. The game applies the accumulated impulse as a force with
+ * a multiplier of 30 over one 10 ms Bullet step, so one application delivers 30 * 0.01 = 0.3 of
+ * the due impulse. The full impulse therefore accumulates in about 1/0.3 = 3.33 frames of
+ * 1/30 s, i.e. in 0.111 seconds of contact. That is the budget; it is in seconds, so it does
+ * not depend on FPS: at 240 FPS it simply spreads over more frames with a smaller share from
+ * each (the share is normalised by the mass patch).
  *
- * Эпизод считается законченным, если персонаж не касался машины дольше RESET_SEC —
- * тогда бюджет выдаётся заново (машина отъехала и ударила снова).
+ * An episode counts as over once the character has not touched the vehicle for longer than
+ * RESET_SEC; then the budget is granted anew (the vehicle backed off and hit again).
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "applyImpulseFromHitPedestrian", warmUp = true)
 public class Patch_impulseBudget {
@@ -35,13 +35,13 @@ public class Patch_impulseBudget {
     }
 
     public static final class Impl {
-        /** Сколько секунд контакта оплачивается импульсом. 0.111 ≈ один физически честный удар. */
+        /** Seconds of contact paid for with impulse. 0.111 ≈ one physically correct hit. */
         public static final float BUDGET_SEC = 0.111f;
-        /** Пауза в контакте, после которой эпизод считается новым. */
+        /** A gap in contact after which the episode counts as a new one. */
         public static final float RESET_SEC = 0.4f;
 
         public static volatile boolean broken = false;
-        /** персонаж -> {израсходовано секунд, время последнего касания в нс} */
+        /** character -> {seconds spent, time of the last touch in ns} */
         public static final Map<Object, float[]> SPENT = new WeakHashMap<Object, float[]>();
         public static final Map<Object, Long> LAST = new WeakHashMap<Object, Long>();
 
@@ -50,7 +50,7 @@ public class Patch_impulseBudget {
         public static boolean logged = false;
         public static long lastReportNanos = 0L;
 
-        /** @return true = пропустить ванильное списание импульса. */
+        /** @return true = skip the vanilla impulse deduction. */
         public static boolean shouldSkip(Object chr) {
             if (!LabGate.active() || !LabSettings.zombieImpact()) {
                 return false;
@@ -72,12 +72,12 @@ public class Patch_impulseBudget {
                     LAST.put(chr, Long.valueOf(now));
                 }
                 if (last != null && (now - last.longValue()) > (long) (RESET_SEC * 1_000_000_000L)) {
-                    spent[0] = 0.0f;   // контакт прерывался — новый эпизод, бюджет заново
+                    spent[0] = 0.0f;   // contact was broken: a new episode, a fresh budget
                 }
                 if (spent[0] >= BUDGET_SEC) {
                     blocked++;
                     report();
-                    return true;       // бюджет исчерпан: тело уже разогнано, отбирать нечего
+                    return true;       // budget spent: the body is up to speed, nothing to take
                 }
                 spent[0] += Patch_getMass.Impl.frameFactor() / Patch_getMass.Impl.REFERENCE_HZ;
                 allowed++;

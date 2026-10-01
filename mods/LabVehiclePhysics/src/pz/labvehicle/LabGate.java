@@ -3,24 +3,24 @@ package pz.labvehicle;
 import java.lang.reflect.Method;
 
 /**
- * Предохранитель: мод действует только там, где он разрешён.
+ * Safety gate: the mod takes effect only where it is allowed.
  *
- * Проблема, ради которой это написано. Java-моды грузятся агентом ZombieBuddy при старте
- * JVM — до того, как игра вообще узнает, на какой сервер игрок собирается. Поэтому патчи
- * классов оказываются в памяти всегда, независимо от того, стоит ли мод на сервере.
- * Lua и скрипты так не проедут: сервер сверяет их контрольные суммы
- * ({@code ChecksumPacket: okLua && okScript && okAnim}) и рвёт соединение при расхождении.
- * А вот нативные классы и библиотеки в эту сверку не входят вовсе.
+ * The problem this was written for. Java mods are loaded by the ZombieBuddy agent at JVM
+ * startup, before the game even knows which server the player is heading to. So the class
+ * patches are always in memory, regardless of whether the mod is installed on the server.
+ * Lua and scripts would not get through like that: the server compares their checksums
+ * ({@code ChecksumPacket: okLua && okScript && okAnim}) and drops the connection on a mismatch.
+ * Native classes and libraries, however, are not part of this check at all.
  *
- * Без предохранителя вышло бы вот что: заходишь с модом на чужой сервер, где его нет, и
- * сбиваешь зомби одиннадцатитонной машиной, пока все остальные ездят на ванильной тонне.
- * Технически это никем не ловится, но по сути — преимущество, которого никто не давал.
+ * Without the safety gate, this is what would happen: you join someone else's server that lacks
+ * the mod and run down zombies in an eleven-tonne vehicle while everyone else drives vanilla
+ * one-tonne cars. Technically nothing catches it, but in essence it is an advantage no one granted.
  *
- * Решение опирается на штатный механизм самой игры: спрашиваем, какие моды реально
- * загружены в этой сессии.
+ * The solution relies on the game's own standard mechanism: we ask which mods are actually
+ * loaded in this session.
  *
- * ВАЖНО, какой именно список спрашивать. Первая версия смотрела в {@code ActiveMods},
- * и это была ошибка — он на клиенте не заполняется вовсе:
+ * It MATTERS which list exactly to ask. The first version looked at {@code ActiveMods},
+ * and that was a mistake: on the client it is not filled in at all:
  * <pre>
  * // GameLoadingState:449
  * if (!GameClient.client) {
@@ -28,33 +28,33 @@ import java.lang.reflect.Method;
  *     ActiveMods.setLoadedMods(activeMods);
  * }
  * </pre>
- * Предохранитель честно решал, что мода нет, и глушил весь мод на любом сервере, включая
- * свой собственный. Мультиплеер у клиента устроен иначе:
+ * The safety gate dutifully concluded that the mod was absent and muted the whole mod on every
+ * server, including your own. Multiplayer works differently on the client:
  * <pre>
  * // ZomboidFileSystem.loadMods(String)
  * if (GameClient.client) {
- *     toLoad.addAll(GameClient.instance.serverMods);   // список модов СЕРВЕРА
+ *     toLoad.addAll(GameClient.instance.serverMods);   // the SERVER's mod list
  *     this.loadMods(toLoad);
  * }
  * </pre>
- * Поэтому спрашиваем {@code ZomboidFileSystem.instance.getModIDs()} — он возвращает то,
- * что реально загружено, одинаково на клиенте, на сервере и в одиночной игре. На клиенте
- * этот список приходит от сервера, что нам и нужно.
+ * So we ask {@code ZomboidFileSystem.instance.getModIDs()}: it returns what is actually
+ * loaded, the same way on the client, on the server and in singleplayer. On the client
+ * this list comes from the server, which is exactly what we need.
  *
  * <ul>
- *   <li>одиночная игра — в списке то, что выбрал игрок, мод там есть, работаем;</li>
- *   <li>свой сервер с модом — он в списке сервера, работаем;</li>
- *   <li>чужой сервер без мода — его в списке нет, все патчи молчат.</li>
+ *   <li>singleplayer: the list holds what the player selected, the mod is there, we run;</li>
+ *   <li>your own server with the mod: it is in the server's list, we run;</li>
+ *   <li>someone else's server without the mod: it is not in the list, all patches stay silent.</li>
  * </ul>
  *
- * Отдельно приятно, что это не проверка «а не читер ли ты», а ровно тот же список, по
- * которому игра решает, какой контент грузить. Договориться с админом сервера — значит
- * просто добавить мод в список, и всё заработает само.
+ * A nice bonus is that this is not an "are you a cheater" check but exactly the same list the
+ * game uses to decide which content to load. Agreeing with the server admin simply means
+ * adding the mod to the list, and everything then works by itself.
  */
 public final class LabGate {
 
     public static final String MOD_ID = "LabVehiclePhysics";
-    /** Как часто перепроверять. Список меняется между сессиями, а не в течение кадра. */
+    /** How often to recheck. The list changes between sessions, not within a frame. */
     public static final long RECHECK_NANOS = 2_000_000_000L;
 
     public static volatile boolean broken = false;
@@ -70,10 +70,10 @@ public final class LabGate {
     private LabGate() {
     }
 
-    /** @return true, если моду разрешено вмешиваться в игру. */
+    /** @return true if the mod is allowed to interfere with the game. */
     public static boolean active() {
         if (broken) {
-            return true;      // не смогли определить — ведём себя как раньше, но об этом сказано в логе
+            return true;      // could not tell: behave as before, but the log says so
         }
         long now = System.nanoTime();
         if (lastCheckNanos != 0L && now - lastCheckNanos < RECHECK_NANOS) {
@@ -107,7 +107,7 @@ public final class LabGate {
         }
     }
 
-    /** Моды, реально загруженные в этой сессии. На клиенте — пришедшие от сервера. */
+    /** Mods actually loaded in this session. On the client, the ones received from the server. */
     public static boolean isLoaded() {
         try {
             Object zfs = fInstance.get(null);

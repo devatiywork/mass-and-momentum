@@ -7,49 +7,49 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Растяжка на NaN в координатах машин и игроков.
+ * NaN tripwire for vehicle and player coordinates.
  *
- * Случай 30.09.2026 (42.21, тестовый сервер): водитель санитарного Bushmaster въехал на КПП
- * Луисвиля в старую кучу скелетов, вид Viewpoint от третьего лица. Через три секунды у
- * СЕРВЕРА копия машины и сам игрок получили NaN вместо координат; клиент продолжал ехать как
- * ни в чём не бывало. При выходе NaN ушёл в players.db и vehicles.db — SQLite пишет NaN как
- * NULL, — и при следующем входе сервер отдал игрока в точку (0,0), за краем карты: загрузка
- * висела, а сервер генерировал мир вокруг нуля.
+ * Incident of 30.09.2026 (42.21, test server): the driver of an ambulance Bushmaster drove into
+ * an old pile of skeletons at the Louisville checkpoint, in Viewpoint third-person view. Three
+ * seconds later, on the SERVER, the vehicle copy and the player itself got NaN coordinates;
+ * the client drove on as if nothing had happened. On exit the NaN went into players.db and
+ * vehicles.db (SQLite writes NaN as NULL), and on the next login the server put the player at
+ * (0,0), off the edge of the map: loading hung while the server generated the world around zero.
  *
- * Сервер координаты машины сам не считает. {@code VehiclePhysicsPacket.processServer} пишет
- * x, y, z, поворот и скорость из пакета водителя как есть, без единой проверки:
+ * The server does not compute vehicle coordinates itself. {@code VehiclePhysicsPacket.processServer}
+ * writes x, y, z, rotation and velocity from the driver's packet as is, without a single check:
  * <pre>
  * vehicle.setX(this.x); vehicle.setY(this.y); vehicle.setZ(this.z);
  * vehicle.savedRot.set(qx, qy, qz, qw); vehicle.jniTransform.origin.set(...);
  * vehicle.jniLinearVelocity.set(vx, vy, vz);
  * </pre>
- * Значит NaN, скорее всего, пришёл в пакете от клиента. Причина не найдена — ради неё
- * растяжка и стоит. Четыре точки:
+ * So the NaN most likely came in a packet from the client. The cause has not been found; the
+ * tripwire is there to find it. Four points:
  *
- * 1. Запись NaN в setX/setY любого IsoMovingObject — строка со стеком: КТО записал
- *    (Patch_nanWriteX/Y). Только лог, первые {@link #MAX_STACKS} раз.
- * 2. Каждое обновление машины (из Patch_vehicleFloor) и игрока (Patch_nanPlayer): помним
- *    последнюю конечную позицию; стала NaN — пишем контекст и возвращаем последнюю
- *    нормальную. На клиенте возврат идёт через setWorldTransform → Bullet.teleportVehicle.
- * 3. Клиент, сборка пакета физики машины (Patch_nanPacketOut): NaN в пакете заменяется
- *    последней нормальной позицией, скорость — нулём. Сервер отравленного пакета не получит.
- * 4. Сервер, приём пакета (Patch_nanPacketIn): пакет с NaN не применяется вовсе.
+ * 1. A NaN written to setX/setY of any IsoMovingObject: a line with the stack showing WHO wrote it
+ *    (Patch_nanWriteX/Y). Log only, the first {@link #MAX_STACKS} times.
+ * 2. Every vehicle update (from Patch_vehicleFloor) and player update (Patch_nanPlayer): we keep
+ *    the last finite position; if it turns NaN, we log the context and restore the last good
+ *    one. On the client the restore goes through setWorldTransform → Bullet.teleportVehicle.
+ * 3. Client, vehicle physics packet assembly (Patch_nanPacketOut): NaN in the packet is replaced
+ *    by the last good position, velocity by zero. The server never receives a poisoned packet.
+ * 4. Server, packet reception (Patch_nanPacketIn): a packet with NaN is not applied at all.
  *
- * Всё — только при открытом предохранителе. Проверка {@link LabGate#active()} стоит там, где
- * NaN уже найден: setX зовётся тысячи раз за кадр, и на быстром пути лишнего быть не должно.
+ * All of this runs only with the safety gate open. The {@link LabGate#active()} check comes only
+ * once a NaN is found: setX runs thousands of times per frame, so the fast path must stay lean.
  */
 public final class NanGuard {
 
     private NanGuard() {
     }
 
-    /** Сколько раз писать стек записи NaN за сессию. */
+    /** How many times per session to log the stack of a NaN write. */
     public static final int MAX_STACKS = 5;
-    /** Сколько подробных строк о каждом виде события за сессию; дальше — только счётчики. */
+    /** Detailed lines per session for each kind of event; after that, counters only. */
     public static final int MAX_DETAILED = 10;
-    /** Глубина стека в строке лога. */
+    /** Stack depth in a log line. */
     public static final int STACK_FRAMES = 14;
-    /** Радиус, в котором считаются трупы и зомби вокруг последней нормальной точки. */
+    /** Radius around the last good point in which corpses and zombies are counted. */
     public static final int AROUND = 2;
 
     public static volatile boolean broken = false;
@@ -68,7 +68,7 @@ public final class NanGuard {
     public static Object scratchT, scratchQ;
     public static boolean viewpoint = false;
 
-    /** Последнее конечное состояние машины. */
+    /** The vehicle's last finite state. */
     public static final class Good {
         public Object transform;
         public float x, y, z;
@@ -133,7 +133,7 @@ public final class NanGuard {
         mGetVehicle = Class.forName("zombie.characters.IsoGameCharacter", false, cl).getMethod("getVehicle");
         zombieClass = Class.forName("zombie.characters.IsoZombie", false, cl);
 
-        // Поля пакета объявлены в VehicleInterpolationData, от неё пакет и наследуется.
+        // The packet fields are declared in VehicleInterpolationData, which the packet extends.
         Class<?> data = Class.forName("zombie.vehicles.VehicleInterpolationData", false, cl);
         pX = open(data, "x");
         pY = open(data, "y");
@@ -180,9 +180,9 @@ public final class NanGuard {
         return !Float.isNaN(v) && !Float.isInfinite(v);
     }
 
-    // ================================================================ 1. кто записал NaN
+    // ================================================================ 1. who wrote the NaN
 
-    /** Из Patch_nanWriteX/Y: в setX/setY пришло не число. Только лог. */
+    /** From Patch_nanWriteX/Y: setX/setY received a non-number. Log only. */
     public static void badWrite(Object self, String axis, float value) {
         writes++;
         if (broken || stacks >= MAX_STACKS || !LabGate.active()) {
@@ -195,7 +195,7 @@ public final class NanGuard {
             }
             StackTraceElement[] st = Thread.currentThread().getStackTrace();
             StringBuilder sb = new StringBuilder();
-            // [0] getStackTrace, [1] badWrite, [2] setX/setY со встроенным advice — дальше вызывающие.
+            // [0] getStackTrace, [1] badWrite, [2] setX/setY with the inlined advice; callers follow.
             for (int i = 2; i < st.length && i < 2 + STACK_FRAMES; i++) {
                 if (sb.length() > 0) {
                     sb.append(" <- ");
@@ -210,9 +210,9 @@ public final class NanGuard {
         }
     }
 
-    // ================================================================ 2. машина и игрок
+    // ================================================================ 2. vehicle and player
 
-    /** Из Patch_vehicleFloor на каждом обновлении машины, клиент и сервер. */
+    /** From Patch_vehicleFloor on every vehicle update, client and server. */
     public static void vehicle(Object vehicle) {
         if (broken || vehicle == null) {
             return;
@@ -269,7 +269,7 @@ public final class NanGuard {
                 }
                 return;
             }
-            // Возврат: трансформ (на клиенте это ещё и Bullet.teleportVehicle), координаты, ноль скорости.
+            // Restore: transform (on the client also Bullet.teleportVehicle), coordinates, zero velocity.
             mSetWorldTransform.invoke(vehicle, g.transform);
             fVx.setFloat(vel, 0.0f);
             fVy.setFloat(vel, 0.0f);
@@ -291,7 +291,7 @@ public final class NanGuard {
         }
     }
 
-    /** Из Patch_nanPlayer на каждом обновлении игрока. */
+    /** From Patch_nanPlayer on every player update. */
     public static void player(Object player) {
         if (broken || player == null || !LabGate.active()) {
             return;
@@ -338,9 +338,9 @@ public final class NanGuard {
         }
     }
 
-    // ================================================================ 3–4. пакет физики машины
+    // ================================================================ 3–4. vehicle physics packet
 
-    /** Клиент: пакет собран ({@code VehiclePhysicsPacket.set}). NaN заменяем последним нормальным. */
+    /** Client: packet built ({@code VehiclePhysicsPacket.set}). Replaces NaN with the last good state. */
     public static void packetOut(Object packet) {
         if (broken || packet == null) {
             return;
@@ -385,7 +385,7 @@ public final class NanGuard {
         }
     }
 
-    /** Сервер: пришёл пакет ({@code processServer}). @return true — не применять. */
+    /** Server: a packet arrived ({@code processServer}). @return true: do not apply it. */
     public static boolean packetIn(Object packet) {
         if (broken || packet == null) {
             return false;
@@ -426,7 +426,7 @@ public final class NanGuard {
                 pVx.getFloat(p), pVy.getFloat(p), pVz.getFloat(p));
     }
 
-    // ================================================================ служебное
+    // ================================================================ helpers
 
     public static void place(Object obj, float x, float y, float z) throws Exception {
         mSetX.invoke(obj, Float.valueOf(x));
@@ -439,7 +439,7 @@ public final class NanGuard {
         mSetNextY.invoke(obj, Float.valueOf(y));
     }
 
-    /** Сидящим в машине с не-числом вместо позиции — позицию машины. */
+    /** Occupants with a non-number for a position get the vehicle's position. */
     public static int fixOccupants(Object vehicle, float x, float y, float z) throws Exception {
         int fixed = 0;
         int seats = ((Integer) mMaxPassengers.invoke(vehicle)).intValue();
@@ -458,7 +458,7 @@ public final class NanGuard {
         return fixed;
     }
 
-    /** Что лежит и ходит рядом с точкой: гипотеза про кучу тел проверяется этим числом. */
+    /** What lies and walks near the point: this count tests the pile-of-bodies hypothesis. */
     public static String around(float x, float y, float z) {
         try {
             Object cell = mGetCell.invoke(fWorld.get(null));
@@ -524,7 +524,7 @@ public final class NanGuard {
         }
     }
 
-    /** Сводка раз в 15 с, если что-то ловилось: подробные строки ограничены, счётчики — нет. */
+    /** Summary every 15 s if anything was caught: detailed lines are capped, counters are not. */
     public static void report() {
         long now = System.nanoTime();
         if (lastReportNanos != 0L && now - lastReportNanos < 15_000_000_000L) {

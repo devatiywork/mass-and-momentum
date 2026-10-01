@@ -1,14 +1,14 @@
 package pz.labvehicle;
 
 /**
- * Лог мода: важное и подробности.
+ * The mod's log: essentials and details.
  *
- * {@link #info} — всегда: загрузка, предохранитель, правка подвески, ошибки, ошибки в конфиге,
- * события растяжки NaN, серверная таблица, сводка настроек.
+ * {@link #info} — always: loading, the safety gate, the suspension fix, errors, config errors,
+ * NaN tripwire events, the server table, the settings summary.
  *
- * {@link #debug} — только в сборке лаборатории ({@link Dev#ENABLED}) или с ключом JVM
- * {@code -Dlabvehicle.verbose=true}: отчёты раз в 15 с, строки по каждой машине, «patch ready».
- * В сборке для Мастерской их нет, иначе мод пишет в console.txt игрока по строке в секунду.
+ * {@link #debug} — only in the lab build ({@link Dev#ENABLED}) or with the JVM option
+ * {@code -Dlabvehicle.verbose=true}: reports every 15 s, per-vehicle lines, "patch ready".
+ * Off in the Workshop build, or the mod would write a line per second to the player's console.txt.
  */
 public final class Log {
 

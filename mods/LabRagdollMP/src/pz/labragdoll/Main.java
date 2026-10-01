@@ -3,11 +3,11 @@ package pz.labragdoll;
 public class Main {
 
     /**
-     * Классы, которые надо загрузить до прохода патчера: ZombieBuddy патчит только уже
-     * загруженные (подробно — pz.labvehicle.Main и modding-notes.md, раздел 1).
+     * Classes that must be loaded before the patcher's pass: ZombieBuddy patches only classes that
+     * are already loaded (details in pz.labvehicle.Main and modding-notes.md, section 1).
      */
     public static final String[] PRELOAD = {
-        // Кооп-сервер с ZombieBuddy: запуск сервера из меню «Хостинг».
+        // Co-op server with ZombieBuddy: launching the server from the "Host" menu.
         "zombie.network.CoopMaster",
     };
 

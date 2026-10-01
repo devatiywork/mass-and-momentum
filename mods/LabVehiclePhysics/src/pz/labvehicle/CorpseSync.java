@@ -7,76 +7,76 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Труп там, где упало тело, — в мультиплеере (пункт 6.1).
+ * The corpse lies where the body fell, in multiplayer (item 6.1).
  *
- * <h2>Как было</h2>
- * У каждого зомби в сети есть хозяин — клиент, который сообщает серверу позицию и здоровье
- * зомби; сервер ему верит. Как только хозяин сообщил «мёртв», сервер сразу создаёт труп в
- * текущей точке — почти на месте удара:
+ * <h2>How it was</h2>
+ * In multiplayer every zombie has an owner: the client that reports the zombie's position and
+ * health to the server, and the server trusts it. As soon as the owner reports "dead", the server
+ * immediately creates the corpse at the current point, almost at the impact point:
  * <pre>
  * // NetworkZombiePacker.parseZombie
  * this.applyZombie(zombie);
  * if (zombie.isDead()) zombie.die();
  * </pre>
- * А рэгдолл у водителя ещё летит. Когда тело ложится, клиент получает серверный труп и, если
- * клетка другая, переносит тело туда ({@code DeadCharacterPacket.processClient}) — прыжок назад.
+ * Yet the driver's ragdoll still flies. On landing, the client gets the server corpse and, if the
+ * square differs, moves the body there ({@code DeadCharacterPacket.processClient}): a jump back.
  *
- * <h2>Как теперь</h2>
+ * <h2>How it is now</h2>
  * <ol>
- *   <li>Сервер, удар машиной, до урона ({@code VehicleHitField.process}): водитель становится
- *       хозяином зомби ({@code NetworkZombieManager.moveZombie} — мёртвого игра не передаёт,
- *       поэтому до урона), зомби помечен «летит».</li>
- *   <li>Сервер, {@code NetworkZombieManager.updateAuth}: пока летит, хозяина не меняем.</li>
- *   <li>Сервер, {@code die()}: пока летит, смерть откладывается.</li>
- *   <li>Клиент водителя, {@code ZombieOnGroundState.enter}: тело легло — точку и направление
- *       серверу командой {@code zombieLanded}.</li>
- *   <li>Сервер: точку прислал водитель — зомби переносится туда и, если мёртв, умирает. Труп
- *       создаётся в точке приземления, пакет смерти у всех с этими координатами, прыжка нет.</li>
+ *   <li>Server, on a vehicle hit, before damage ({@code VehicleHitField.process}): the driver
+ *       becomes the zombie's owner ({@code NetworkZombieManager.moveZombie}; the game does
+ *       not transfer a dead zombie, hence before damage), and the zombie is marked "flying".</li>
+ *   <li>Server, {@code NetworkZombieManager.updateAuth}: keep the owner while it flies.</li>
+ *   <li>Server, {@code die()}: while it flies, the death is deferred.</li>
+ *   <li>Driver's client, {@code ZombieOnGroundState.enter}: the body has landed, so it sends the
+ *       point and direction to the server with the {@code zombieLanded} command.</li>
+ *   <li>Server: the point came from the driver, so the zombie moves there and, if dead, dies. The
+ *       corpse is created at the landing point, death packets carry it to everyone: no jump.</li>
  * </ol>
  *
- * <h2>Ожидание снимается, когда тело легло, — не по часам</h2>
- * Тело может долго ехать на капоте. Поэтому ждём не фиксированное время, а пока:
+ * <h2>The wait ends when the body lands, not on a timer</h2>
+ * A body can ride on the hood for a long time. So instead of a fixed time we wait until:
  * <ul>
- *   <li>не пришла точка приземления;</li>
- *   <li>водитель в обычном сообщении хозяина не сообщил {@code realState == OnGround} — позиция
- *       в том же сообщении и есть точка приземления, сервер применяет её до {@code die()};</li>
- *   <li>у зомби не пропал хозяин — водитель вышел;</li>
- *   <li>не прошло {@link #PENDING_NANOS} — только от вечного ожидания: если клиент водителя
- *       выгрузил зомби, от него не придёт ни точки, ни «лежит», и мёртвый зомби без трупа
- *       висел бы на сервере до перезапуска.</li>
+ *   <li>the landing point arrives;</li>
+ *   <li>the driver, in a regular owner update, reports {@code realState == OnGround}: the position
+ *       in that update is the landing point, and the server applies it before {@code die()};</li>
+ *   <li>the zombie loses its owner (the driver left);</li>
+ *   <li>{@link #PENDING_NANOS} passes. This only guards against waiting forever: if the driver's
+ *       client unloaded the zombie, neither a point nor "on ground" will come from it, and a dead
+ *       zombie without a corpse would hang on the server until a restart.</li>
  * </ul>
  *
- * <h2>Расстояние точки не проверяется</h2>
- * Защиты такая проверка не даёт: хозяин зомби и так может сообщить серверу любую его позицию,
- * игра её не проверяет ({@code applyZombie}). А вред есть: сервер видит зомби по сообщениям
- * хозяина, а те идут раз в 4 секунды, если рядом нет других игроков, — тело на капоте за это
- * время уезжает на сотню клеток, и настоящую точку пришлось бы отвергнуть. Проверяем только,
- * что точку прислал тот, кто сбил.
+ * <h2>The landing point's distance is not checked</h2>
+ * Such a check gives no protection: the zombie's owner can report any position for it anyway,
+ * and the game does not check it ({@code applyZombie}). But it does harm: the server sees the
+ * zombie through the owner's updates, and those come once every 4 seconds when no other players
+ * are nearby; in that time a body on the hood travels a hundred tiles, and the real point would
+ * have to be rejected. We only check that the point came from the player who hit the zombie.
  *
- * Клиентскую сторону ожидания трупа трогать не нужно: {@code die()} у клиента повторяется каждый
- * кадр, пока трупа нет ({@code ZombieOnGroundState.execute}), и пакет смерти, пришедший после
- * приземления, обрабатывается сразу; его пятисекундный таймаут отсчитывается от прихода пакета.
+ * The client side of waiting for the corpse needs no changes: on the client {@code die()} repeats
+ * every frame until there is a corpse ({@code ZombieOnGroundState.execute}), and a death packet
+ * that arrives after landing is handled at once; its five-second timeout counts from its arrival.
  */
 public final class CorpseSync {
 
     /**
-     * Сервер: страховка от вечного ожидания — см. описание класса. Не ограничение на полёт:
-     * тело кончает лететь раньше — точкой, «лежит» от хозяина или уходом водителя.
+     * Server: a safeguard against waiting forever, see the class description. Not a flight limit:
+     * the flight ends sooner, via a landing point, the owner's "on ground", or the driver leaving.
      */
     public static final long PENDING_NANOS = 300_000_000_000L;
-    /** Клиент водителя: та же страховка — после этого тело уже не наше. */
+    /** Driver's client: the same safeguard; after this the body is no longer ours. */
     public static final long FLYING_NANOS = 300_000_000_000L;
     public static final long REPORT_NANOS = 15_000_000_000L;
     public static final String MODULE = "LabVehiclePhysics";
     public static final String COMMAND = "zombieLanded";
 
-    /** Сервер: сбитый машиной зомби ждёт точку приземления от водителя. */
+    /** Server: a zombie hit by a vehicle waits for the landing point from the driver. */
     public static final class Pending {
         public Object driver;
         public long deadline;
     }
 
-    /** Клиент водителя: кого сбили и кто был за рулём. */
+    /** Driver's client: who was hit and who was driving. */
     public static final class Flying {
         public Object driver;
         public long since;
@@ -84,12 +84,12 @@ public final class CorpseSync {
 
     public static final Map<Object, Pending> PENDING = Collections.synchronizedMap(new WeakHashMap<Object, Pending>());
     public static final Map<Object, Flying> FLYING = Collections.synchronizedMap(new WeakHashMap<Object, Flying>());
-    /** Пока никого не ждём — патчи на горячих путях стоят одну проверку флага. */
+    /** While nobody is awaited, the patches on hot paths cost one flag check. */
     public static volatile boolean anyPending = false;
     public static volatile boolean anyFlying = false;
     public static volatile boolean broken = false;
 
-    // ---- рефлексия
+    // ---- reflection
     public static Class<?> zombieClass;
     public static Class<?> playerClass;
     public static Field fServer;
@@ -128,7 +128,7 @@ public final class CorpseSync {
     public static Field fRealState;
     public static Object onGroundState;
 
-    // ---- счётчики для строки в логе
+    // ---- counters for the log line
     public static int logged = 0;
     public static long held = 0L;
     public static long landed = 0L;
@@ -201,12 +201,12 @@ public final class CorpseSync {
         return !broken && LabGate.active() && LabSettings.corpseFollows();
     }
 
-    // ================================================================ сервер
+    // ================================================================ server
 
     /**
-     * Сервер, удар машиной — до урона. Полёт будет, только если удар валит с ног или убивает:
-     * рэгдолл у водителя стартует на {@code bDead} или {@code bKnockedDown}. Остальных держать
-     * незачем — иначе смерть от чего-то другого в ближайшие секунды тоже ждала бы приземления.
+     * Server, vehicle hit, before damage. A flight happens only if the hit knocks down or kills:
+     * the driver's ragdoll starts on {@code bDead} or {@code bKnockedDown}. No reason to hold the
+     * others: otherwise a death from another cause shortly after would also await a landing.
      */
     public static void onServerVehicleHit(Object wielder, Object target, Object vehicle, Object field) {
         if (wielder == null || target == null || vehicle == null || field == null || !enabled()) {
@@ -221,7 +221,7 @@ public final class CorpseSync {
                 return;
             }
             if (((Boolean) mIsDead.invoke(target)).booleanValue()) {
-                return;     // мёртвого игра другому хозяину не отдаёт
+                return;     // the game does not hand a dead zombie to another owner
             }
             float health = ((Float) mGetHealth.invoke(target)).floatValue();
             float damage = fHitDamage.getFloat(field);
@@ -246,19 +246,19 @@ public final class CorpseSync {
         }
     }
 
-    /** Сервер, вход в {@code die()}: true — отложить, тело ещё летит у водителя. */
+    /** Server, entry to {@code die()}: true to defer, the driver still sees the body flying. */
     public static boolean deferDeath(Object chr) {
         return anyPending && chr != null && stillFlying(chr);
     }
 
-    /** Сервер, вход в {@code NetworkZombieManager.updateAuth}: true — хозяина не трогать. */
+    /** Server, entry to {@code NetworkZombieManager.updateAuth}: true to leave the owner alone. */
     public static boolean holdOwner(Object zombie) {
         return anyPending && zombie != null && stillFlying(zombie);
     }
 
     /**
-     * Сервер: ждём ли ещё этого зомби. Нет — ожидание снимается, дальше ваниль: {@code die()}
-     * пройдёт в той точке, где сервер видит зомби сейчас.
+     * Server: whether we still wait for this zombie. If not, the wait ends and vanilla takes
+     * over: {@code die()} goes through at the point where the server sees the zombie now.
      */
     public static boolean stillFlying(Object zombie) {
         Pending p = PENDING.get(zombie);
@@ -268,8 +268,8 @@ public final class CorpseSync {
         try {
             String why = null;
             if (fRealState.get(zombie) == onGroundState) {
-                // Хозяин-водитель сам сообщил, что тело лежит, — позицию из того же сообщения
-                // сервер уже применил, она и есть точка приземления.
+                // The owner (the driver) itself reported the body on the ground; the server has
+                // already applied the position from that same update, and it is the landing point.
                 onGround++;
                 why = "on-ground";
             } else if (mGetOwner.invoke(zombie) == null) {
@@ -299,7 +299,7 @@ public final class CorpseSync {
         }
     }
 
-    /** Сервер: водитель сообщил, где легло тело. {@code args = {id, x, y, a}}, a — градусы. */
+    /** Server: the driver's landing report. {@code args = {id, x, y, a}}, a in degrees. */
     public static void serverLanded(Object player, Object args) {
         if (player == null || args == null || !enabled()) {
             return;
@@ -322,18 +322,18 @@ public final class CorpseSync {
             }
             Object zombie = mZombieMapGet.invoke(fZombieMap.get(fServerMapInstance.get(null)), Short.valueOf((short) id));
             if (zombie == null) {
-                return;     // уже труп или выгружен — поздно
+                return;     // already a corpse or unloaded: too late
             }
             Pending p = PENDING.get(zombie);
             if (p == null) {
-                return;     // не наш: ванильный путь
+                return;     // not ours: the vanilla path
             }
             if (p.driver != player) {
                 TreeBreak.warnOnce("corpse-driver", "corpse sync: a landing point came from a player who did not hit the zombie - ignored");
                 return;
             }
-            // Смещение — только для лога: насколько сервер отставал от тела. Не проверяем —
-            // см. описание класса.
+            // The offset is only for the log: how far the server lagged behind the body. Not
+            // checked: see the class description.
             float dx = x - ((Float) mGetX.invoke(zombie)).floatValue();
             float dy = y - ((Float) mGetY.invoke(zombie)).floatValue();
             float offset = (float) Math.sqrt(dx * dx + dy * dy);
@@ -359,7 +359,7 @@ public final class CorpseSync {
         }
     }
 
-    /** Перенести зомби на сервере так же, как это делает приём сообщения хозяина ({@code applyZombie}). */
+    /** Move the zombie on the server the way an incoming owner update does ({@code applyZombie}). */
     public static void place(Object zombie, float x, float y, float angleDeg) throws Exception {
         mSetLastX.invoke(zombie, mSetNextX.invoke(zombie, mSetX.invoke(zombie, Float.valueOf(x))));
         mSetLastY.invoke(zombie, mSetNextY.invoke(zombie, mSetY.invoke(zombie, Float.valueOf(y))));
@@ -372,9 +372,9 @@ public final class CorpseSync {
         }
     }
 
-    // ================================================================ клиент водителя
+    // ================================================================ driver's client
 
-    /** Клиент: зомби сбила машина, за рулём которой наш игрок, — ждём, когда тело ляжет. */
+    /** Client: a zombie was hit by a vehicle our player is driving; wait for the body to land. */
     public static void onLocalHit(Object character, Object vehicle) {
         if (character == null || vehicle == null || !enabled()) {
             return;
@@ -402,7 +402,7 @@ public final class CorpseSync {
         }
     }
 
-    /** Клиент, вход в {@code ZombieOnGroundState.enter}: тело легло — точку серверу. */
+    /** Client, entry to {@code ZombieOnGroundState.enter}: body landed, point to the server. */
     public static void onLanded(Object zombie) {
         if (!anyFlying || zombie == null) {
             return;
@@ -454,9 +454,9 @@ public final class CorpseSync {
         mSendClientCommand.invoke(gameClient, driver, MODULE, COMMAND, args);
     }
 
-    // ================================================================ общее
+    // ================================================================ common
 
-    /** Сводка раз в 15 секунд, только если что-то происходило. */
+    /** A summary every 15 seconds, only if something happened. */
     public static void report() {
         long now = System.nanoTime();
         if (now - lastReportNanos < REPORT_NANOS) {

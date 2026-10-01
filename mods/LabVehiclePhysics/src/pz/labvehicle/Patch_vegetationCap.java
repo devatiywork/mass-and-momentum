@@ -3,16 +3,16 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Кусты, часть 1: снять ванильный потолок скорости и списать новые объекты из списка
- * контактов — см. {@link VegetationDrag}.
+ * Bushes, part 1: remove the vanilla speed cap and deduct energy for new objects in the contact
+ * list; see {@link VegetationDrag}.
  *
- * На выходе {@code BaseVehicle.breakingObjects()} поле {@code breakingSlowFactor} уже
- * посчитано; обнуляем его, и {@code updateVelocityMultiplier} оставляет только общий
- * предел скорости игры. Объекты со свойством CarSlowFactor, с которыми машина сейчас
- * в контакте, лежат в {@code breakingObjectsList} — каждый списывается один раз за контакт.
+ * On exit from {@code BaseVehicle.breakingObjects()} the {@code breakingSlowFactor} field is
+ * already computed; we zero it, and {@code updateVelocityMultiplier} keeps only the game's general
+ * speed limit. Objects with the CarSlowFactor property that the vehicle is currently in contact
+ * with sit in {@code breakingObjectsList}; each one costs energy once per contact.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy в метод игры — только public-члены,
- * никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit() into the game's method: public members only,
+ * no lambdas.
  */
 @Patch(className = "zombie.vehicles.BaseVehicle", methodName = "breakingObjects", warmUp = true)
 public class Patch_vegetationCap {

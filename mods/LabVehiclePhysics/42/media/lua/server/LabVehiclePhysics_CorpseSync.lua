@@ -1,10 +1,10 @@
 --[[
-  Труп там, где упало тело, — сторона сервера.
+  Corpse where the body fell — the server side.
 
-  Рэгдолл сбитого зомби считает только клиент водителя, а труп создаёт сервер. Сервер при
-  ударе отдаёт зомби водителю и откладывает смерть, а клиент водителя, когда тело легло,
-  шлёт команду zombieLanded с точкой и направлением. Сервер проверяет её и создаёт труп
-  там (CorpseSync.serverLanded).
+  Only the driver's client simulates the ragdoll of a hit zombie, but the server creates the
+  corpse. On impact the server hands the zombie over to the driver and delays its death, and the
+  driver's client, once the body has come to rest, sends a zombieLanded command with the point and
+  direction. The server validates it and creates the corpse there (CorpseSync.serverLanded).
 ]]
 
 if not isServer() then return end

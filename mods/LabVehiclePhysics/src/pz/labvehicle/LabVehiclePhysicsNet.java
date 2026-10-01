@@ -3,16 +3,16 @@ package pz.labvehicle;
 import me.zed_0xff.zombie_buddy.Exposer;
 
 /**
- * Вход из Lua в Java для серверной таблицы ({@link ServerTable}).
+ * Entry point from Lua into Java for the server table ({@link ServerTable}).
  *
- * ZombieBuddy открывает класс для Lua, статические методы зовутся через точку:
- * {@code LabVehiclePhysicsNet.serverTable()}. Имя в аннотации не задано — тогда класс идёт
- * штатным путём игры ({@code exposeLikeJavaRecursively} в корень окружения), и Kahlua
- * кладёт его под простым именем, если оно свободно, — как классы самой игры.
+ * ZombieBuddy exposes the class to Lua, and static methods are called with a dot:
+ * {@code LabVehiclePhysicsNet.serverTable()}. The annotation sets no name, so the class takes
+ * the game's standard route ({@code exposeLikeJavaRecursively} into the environment root), and
+ * Kahlua registers it under its simple name if that name is free, like the game's own classes.
  *
- * Всё публичное статическое здесь видно из Lua любого мода, поэтому логики тут нет —
- * только входы, которые нужны нашим Lua-файлам: {@code LabVehiclePhysics_ServerTable.lua},
- * {@code LabVehiclePhysics_TreeBreak.lua} и {@code LabVehicleFuel.lua}.
+ * Everything public and static here is visible to the Lua of any mod, so there is no logic here,
+ * only the entry points our Lua files need: {@code LabVehiclePhysics_ServerTable.lua},
+ * {@code LabVehiclePhysics_TreeBreak.lua} and {@code LabVehicleFuel.lua}.
  */
 @Exposer.LuaClass
 public final class LabVehiclePhysicsNet {
@@ -20,56 +20,56 @@ public final class LabVehiclePhysicsNet {
     private LabVehiclePhysicsNet() {
     }
 
-    /** Клиент: уже в игре и может слать команды серверу. */
+    /** Client: already in game and able to send commands to the server. */
     public static boolean clientReady() {
         return ServerTable.clientReady();
     }
 
-    /** Сервер: номер версии своего vehicle-physics.cfg, растёт при каждом изменении. */
+    /** Server: version number of its own vehicle-physics.cfg, incremented on every change. */
     public static double serverStamp() {
         return ServerTable.serverStamp();
     }
 
-    /** Сервер: таблица для отправки клиентам, null если собрать не вышло. */
+    /** Server: the table to send to clients, or null if it could not be built. */
     public static Object serverTable() {
         return ServerTable.build();
     }
 
-    /** Клиент: принять таблицу, присланную сервером. */
+    /** Client: accept the table sent by the server. */
     public static void receiveServerTable(Object args) {
         ServerTable.accept(args);
     }
 
-    /** Сервер: клиент водителя сообщил об ударе в дерево — см. {@link TreeBreak#serverTreeHit}. */
+    /** Server: the driver's client reports hitting a tree; see {@link TreeBreak#serverTreeHit}. */
     public static void serverTreeHit(Object player, Object args) {
         TreeBreak.serverTreeHit(player, args);
     }
 
-    /** Сервер: клиент водителя сообщил, где легло сбитое тело — см. {@link CorpseSync#serverLanded}. */
+    /** Server: the driver's client reports where a hit body landed; see {@link CorpseSync#serverLanded}. */
     public static void serverZombieLanded(Object player, Object args) {
         CorpseSync.serverLanded(player, args);
     }
 
     /**
-     * Масса скрипта машины до нашего справочника, кг; 0 — скрипт ещё не встречался.
-     * Для расхода топлива «как в игре» в {@code LabVehicleFuel.lua}.
+     * Vehicle script mass before our reference table, kg; 0 means the script has not been seen yet.
+     * Used for the "as in the game" fuel consumption in {@code LabVehicleFuel.lua}.
      */
     public static double originalMass(String scriptName) {
         return VehicleCfg.originalMass(scriptName);
     }
 
     /**
-     * Переключатель песочницы «Расход топлива по массе». Lua спрашивает здесь, а не в
-     * {@code SandboxVars}: правка из отладочного меню одиночной игры меняет сами опции, а
-     * таблицу {@code SandboxVars} не обновляет до перезахода.
+     * The sandbox toggle "Fuel consumption by mass". Lua asks here rather than in
+     * {@code SandboxVars}: an edit from the singleplayer debug menu changes the options
+     * themselves but does not update the {@code SandboxVars} table until you rejoin.
      */
     public static boolean fuelByMass() {
         return LabSettings.fuelByMass();
     }
 
-    // ---- панель «Физика транспорта: машины» (LabVehiclePhysics_VehicleTable.lua), см. VehicleTable
+    // ---- "Vehicle Physics: vehicles" panel (LabVehiclePhysics_VehicleTable.lua), see VehicleTable
 
-    /** Все машины: массив {name, full, mod, vanilla}; null — не вышло, причина в логе. */
+    /** All vehicles: array of {name, full, mod, vanilla}; null on failure, reason in the log. */
     public static Object tableVehicles() {
         try {
             return VehicleTable.vehicles();
@@ -79,7 +79,7 @@ public final class LabVehiclePhysicsNet {
         }
     }
 
-    /** Пресеты по типу техники: массив {id, mass, power, maxSpeed, tank, lowGear, lowGearTo, category}. */
+    /** Vehicle type presets: array of {id, mass, power, maxSpeed, tank, lowGear, lowGearTo, category}. */
     public static Object tablePresets() {
         try {
             return VehicleTable.presets();
@@ -89,7 +89,7 @@ public final class LabVehiclePhysicsNet {
         }
     }
 
-    /** Значения машины без строки таблицы и со строкой {@code row}: {base, result, game}. */
+    /** A vehicle's values without its table row and with row {@code row}: {base, result, game}. */
     public static Object tableDescribe(String name, String row) {
         try {
             return VehicleTable.describe(name, row);

@@ -10,45 +10,45 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Серверная таблица: в сети физику машин задаёт файл сервера.
+ * Server table: in multiplayer the server's file defines the vehicle physics.
  *
- * <h2>Зачем</h2>
- * В мультиплеере машину считает клиент водителя: сервер машины в Bullet не регистрирует
- * вовсе ({@code VehicleScript.Loaded()} зовёт {@code toBullet()} только при
- * {@code !GameServer.server}). Пока каждый клиент читал свой {@code vehicle-physics.cfg},
- * одна и та же машина весила по-разному — смотря кто за рулём.
+ * <h2>Why</h2>
+ * In multiplayer a vehicle is simulated by the driver's client: the server does not register
+ * vehicles in Bullet at all ({@code VehicleScript.Loaded()} calls {@code toBullet()} only when
+ * {@code !GameServer.server}). While each client read its own {@code vehicle-physics.cfg},
+ * the same vehicle weighed differently depending on who was driving.
  *
- * <h2>Правило</h2>
+ * <h2>The rule</h2>
  * <ul>
- *   <li>одиночная игра — свой файл, как раньше;</li>
- *   <li>сервер — свой файл. У кооп-хоста это файл хоста: сервер там отдельный процесс,
- *       но с той же папкой Zomboid. У выделенного — файл в папке сервера, то есть админа;</li>
- *   <li>клиент в сети свой файл не читает вообще и берёт таблицу сервера. Пока она не
- *       пришла, действуют только встроенные данные и данные авторов — они у всех одинаковые.</li>
+ *   <li>singleplayer: its own file, as before;</li>
+ *   <li>server: its own file. On a co-op host it is the host's file: a separate server process,
+ *       but the same Zomboid folder. On a dedicated one, the admin's file in its folder;</li>
+ *   <li>a multiplayer client does not read its own file at all and takes the server's table. Until
+ *       it arrives, only the built-in data and mod author data apply, the same for everyone.</li>
  * </ul>
- * Встроенные данные и данные авторов по сети не передаются: они лежат в модах, а список
- * модов сервер и так навязывает клиенту.
+ * Built-in data and author data are not sent over the network: they live in mods, and the server
+ * already imposes its mod list on the client.
  *
- * <h2>Как ходит</h2>
- * Штатными командами модов: клиент просит ({@code sendClientCommand}), сервер отвечает
- * ({@code sendServerCommand}) и рассылает заново, когда файл изменился. Lua здесь только
- * почтальон — {@code LabVehiclePhysics_ServerTable.lua} в {@code client/} и {@code server/}.
- * До Java он дотягивается через {@link LabVehiclePhysicsNet}.
+ * <h2>How it travels</h2>
+ * Via the stock mod commands: the client asks ({@code sendClientCommand}), the server answers
+ * ({@code sendServerCommand}) and broadcasts again when the file changes. Lua here is only the
+ * postman: {@code LabVehiclePhysics_ServerTable.lua} in {@code client/} and {@code server/}.
+ * It reaches Java through {@link LabVehiclePhysicsNet}.
  *
- * Таблица приходит уже после загрузки мира, и раньше её не получить: команду можно
- * послать только из игры. Поэтому по приходу скрипты переприменяются, а машины, которые
- * успели появиться, обновляются — см. {@link VehicleCfg#refreshVehicles()}.
+ * The table arrives only after the world has loaded, and there is no way to get it earlier:
+ * the command can only be sent from in game. So on arrival the scripts are reapplied, and the
+ * vehicles that have already appeared are updated; see {@link VehicleCfg#refreshVehicles()}.
  *
- * Файл уходит строками, а не одним текстом: строка в пакете игры предваряется длиной
- * в {@code short} ({@code GameWindow.StringUTF}), то есть не длиннее 32 КБ.
+ * The file goes out line by line, not whole: a string in a game packet is prefixed with its length
+ * as a {@code short} ({@code GameWindow.StringUTF}), so a string is at most 32 KB.
  */
 public final class ServerTable {
 
-    /** Формат таблицы. Поднимать, только если меняется смысл полей. */
+    /** Table format. Bump it only when the meaning of the fields changes. */
     public static final int PROTOCOL = 1;
     public static final int MAX_LINES = 5000;
     public static final int MAX_LINE_CHARS = 1000;
-    /** Буфер пакета у игры 1 000 000 байт (UdpConnection), берём с большим запасом. */
+    /** The game's packet buffer is 1 000 000 bytes (UdpConnection); we keep a wide margin. */
     public static final int MAX_TOTAL_CHARS = 256 * 1024;
 
     public static volatile boolean broken = false;
@@ -61,18 +61,18 @@ public final class ServerTable {
     public static Method mRawget;
     public static Class<?> kahluaTable;
 
-    /** Правила последней принятой таблицы. Пустой список, пока ничего не пришло. */
+    /** Rules of the last accepted table. An empty list until something arrives. */
     public static volatile List<VehicleCfg.Rule> rules = Collections.<VehicleCfg.Rule>emptyList();
     public static volatile boolean received = false;
-    /** Растёт при каждой новой таблице и при сбросе старой — по нему VehicleCfg видит перемену. */
+    /** Grows on each new table and on dropping the old one; VehicleCfg spots changes by it. */
     public static int generation = 0;
     public static double stamp = -1.0;
     public static List<String> lines = Collections.<String>emptyList();
     /**
-     * Lua-окружение, в котором пришла таблица. Новое подключение пересоздаёт окружение
-     * ({@code LuaManager.init()}: {@code env = platform.newEnvironment()}), так что таблица
-     * прошлого сервера узнаётся по нему и не доживает до следующего. Слабая ссылка —
-     * чтобы не держать в памяти весь Lua старой сессии.
+     * The Lua environment the table arrived in. A new connection recreates the environment
+     * ({@code LuaManager.init()}: {@code env = platform.newEnvironment()}), so a previous server's
+     * table is recognized by it and does not survive into the next one. A weak reference, so as
+     * not to keep the whole Lua state of the old session in memory.
      */
     public static WeakReference<Object> receivedIn = new WeakReference<Object>(null);
     public static final Set<String> WARNED = new HashSet<String>();
@@ -80,7 +80,7 @@ public final class ServerTable {
     private ServerTable() {
     }
 
-    /** Флаги сети. Отдельно от Lua: режим спрашивают на каждом кадре, и Lua ему не нужен. */
+    /** Network flags. Separate from Lua: the mode is queried every frame and needs no Lua. */
     public static void initNet() throws Exception {
         if (fClient != null) {
             return;
@@ -105,8 +105,8 @@ public final class ServerTable {
     }
 
     /**
-     * Клиент в сети — в том числе клиент самого кооп-хоста: он тоже подключается
-     * к своему серверу и получает таблицу оттуда, как все.
+     * A multiplayer client, including the co-op host's own client: it also connects
+     * to its own server and gets the table from there, like everyone else.
      */
     public static boolean isMpClient() {
         if (broken) {
@@ -124,11 +124,11 @@ public final class ServerTable {
     }
 
     /**
-     * Можно ли уже слать серверу.
+     * Whether we can already send to the server.
      *
-     * {@code sendClientCommand} уходит в сеть только при {@code GameClient.ingame}, а флаг
-     * ставится в {@code IngameState.UpdateStuff()} — уже после {@code OnGameStart}. Раньше
-     * этого команда молча уходит по пути одиночной игры и до сервера не доходит.
+     * {@code sendClientCommand} goes out only with {@code GameClient.ingame}, and the flag
+     * is set in {@code IngameState.UpdateStuff()}, only after {@code OnGameStart}. Before that
+     * the command silently takes the singleplayer path and never reaches the server.
      */
     public static boolean clientReady() {
         try {
@@ -138,19 +138,19 @@ public final class ServerTable {
         }
     }
 
-    // ---------------------------------------------------------------- сервер
+    // ---------------------------------------------------------------- server
 
-    /** Номер версии своего файла: растёт при каждом его изменении. */
+    /** Version number of our own file: it grows with every change to the file. */
     public static double serverStamp() {
         VehicleCfg.reloadIfNeeded();
         return VehicleCfg.playerStamp;
     }
 
     /**
-     * Таблица для отправки клиентам: {@code {v, present, stamp, count, lines = {...}}}.
-     * Зовётся из Lua, то есть в главном потоке, — трогать Kahlua здесь безопасно.
+     * The table to send to clients: {@code {v, present, stamp, count, lines = {...}}}.
+     * Called from Lua, i.e. on the main thread, so touching Kahlua here is safe.
      *
-     * @return null, если собрать не вышло; Lua тогда ничего не шлёт
+     * @return null if it could not be built; Lua then sends nothing
      */
     public static Object build() {
         try {
@@ -189,9 +189,9 @@ public final class ServerTable {
         }
     }
 
-    // ---------------------------------------------------------------- клиент
+    // ---------------------------------------------------------------- client
 
-    /** Принять таблицу сервера. Зовётся из Lua по команде {@code table}. */
+    /** Accept the server's table. Called from Lua on the {@code table} command. */
     public static void accept(Object args) {
         try {
             init();
@@ -232,8 +232,8 @@ public final class ServerTable {
             Object env = fEnv.get(null);
 
             synchronized (ServerTable.class) {
-                // Один и тот же ответ приходит дважды, когда запрос клиента разминулся
-                // с рассылкой после правки файла. Переприменять из-за этого скрипты незачем.
+                // The same reply arrives twice when the client's request crossed paths with
+                // the broadcast after a file edit. No reason to reapply the scripts for that.
                 if (received && receivedIn.get() == env && stampIn == stamp && got.equals(lines)) {
                     return;
                 }
@@ -247,7 +247,7 @@ public final class ServerTable {
                 received = true;
                 generation++;
             }
-            // Подхватить в ближайшем reloadIfNeeded, не дожидаясь двухсекундной паузы.
+            // Pick it up in the next reloadIfNeeded without waiting out the two-second pause.
             VehicleCfg.lastCheckNanos = 0L;
             Log.info("[LabVehiclePhysics] server table received: " + parsed.size() + " rule(s), version "
                     + VehicleCfg.fmt((float) stampIn)
@@ -258,9 +258,9 @@ public final class ServerTable {
     }
 
     /**
-     * Поколение таблицы. Заодно выбрасывает таблицу прошлого подключения: если между
-     * сессиями {@code GameClient.client} не успел побыть false у нас на глазах, режим
-     * не переключится, и без этой проверки новый сервер начинал бы с чужих чисел.
+     * The table generation. Also discards the previous connection's table: if between
+     * sessions {@code GameClient.client} was false too briefly for us to see, the mode does
+     * not switch, and without this check a new server would start with someone else's numbers.
      */
     public static synchronized int generation() {
         if (received) {

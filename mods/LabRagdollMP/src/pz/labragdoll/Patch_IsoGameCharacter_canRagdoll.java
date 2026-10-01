@@ -6,19 +6,19 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * LabRagdollMP: снимает запрет рэгдолла в мультиплеере.
+ * LabRagdollMP: lifts the ban on ragdolls in multiplayer.
  *
- * Ваниль (IsoGameCharacter.canRagdoll, 42.20.4) начинается с
- * {@code if (GameClient.client || GameServer.server) return false;} — рэгдолл выключен
- * в мультиплеере намертво, никакой настройкой не включается. Мы не форсируем true
- * (это сломало бы лимит одновременных симуляций и проверки состояния), а при ванильном
- * false пересчитываем ВСЕ остальные условия сами, пропуская только первую ветку.
+ * Vanilla (IsoGameCharacter.canRagdoll, 42.20.4) begins with
+ * {@code if (GameClient.client || GameServer.server) return false;}: ragdolls are hard-disabled
+ * in multiplayer, and no setting turns them on. We do not force true (that would break the
+ * limit on concurrent simulations and the state checks); instead, when vanilla says false, we
+ * re-evaluate ALL the other conditions ourselves, skipping only that first branch.
  *
- * Всё через рефлексию намеренно: классы игры собраны под Java 25, JDK 17 их не читает.
- * Любая неожиданность → мод выключается и больше не вмешивается.
+ * All reflection, on purpose: the game classes are built for Java 25, and JDK 17 cannot read them.
+ * Anything unexpected → the mod disables itself and no longer interferes.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy прямо в canRagdoll(), поэтому здесь можно
- * трогать только public-члены и нельзя использовать лямбды.
+ * IMPORTANT: ByteBuddy inlines the body of exit() straight into canRagdoll(), so only public
+ * members may be touched here, and lambdas cannot be used.
  */
 @Patch(className = "zombie.characters.IsoGameCharacter", methodName = "canRagdoll", warmUp = true)
 public class Patch_IsoGameCharacter_canRagdoll {
@@ -30,10 +30,10 @@ public class Patch_IsoGameCharacter_canRagdoll {
         }
     }
 
-    /** Реализация — отдельный public-класс, вызывается из встроенного кода. */
+    /** The implementation: a separate public class, called from the inlined code. */
     public static final class Impl {
 
-        // причины отказа
+        // denial reasons
         public static final int OK = 0;
         public static final int R_DEBUG = 1;
         public static final int R_OPTION = 2;
@@ -54,7 +54,7 @@ public class Patch_IsoGameCharacter_canRagdoll {
         public static boolean zombieSeen = false;
         public static long lastReportNanos = 0L;
 
-        // кэш рефлексии
+        // reflection cache
         public static Method coreGetInstance;
         public static Method coreUsePhysicsHitReaction;
         public static Method coreMaxActiveRagdolls;
@@ -63,12 +63,12 @@ public class Patch_IsoGameCharacter_canRagdoll {
         public static Method ragdollNumActive;
         public static Field chrWornClothingCanRagdoll;
 
-        /** Пересчёт ванильных условий без мультиплеерного запрета. */
+        /** Re-evaluates the vanilla conditions without the multiplayer ban. */
         public static boolean recheckWithoutMpGate(Object chr) {
             if (broken || chr == null) {
                 return false;
             }
-            // Мода нет в списке этой игры — например, чужой сервер: оставляем ваниль.
+            // The mod is not in this game's mod list (someone else's server, say): keep vanilla.
             if (!LabGate.active()) {
                 return false;
             }
@@ -112,7 +112,7 @@ public class Patch_IsoGameCharacter_canRagdoll {
             }
         }
 
-        /** Учёт причины + разовый лог каждой новой причины + периодическая сводка. */
+        /** Counts the reason + logs each new reason once + a periodic summary. */
         public static boolean tally(boolean isZombie, int reason) {
             if (isZombie) {
                 countZombie[reason]++;
@@ -131,7 +131,7 @@ public class Patch_IsoGameCharacter_canRagdoll {
             return reason == OK;
         }
 
-        /** Раз в 15 с — сводка по причинам. */
+        /** Once every 15 s: a summary by reason. */
         public static void reportPeriodic() {
             long now = System.nanoTime();
             if (lastReportNanos == 0L) {
@@ -197,7 +197,7 @@ public class Patch_IsoGameCharacter_canRagdoll {
             Log.debug("[LabRagdollMP] reflection ready (" + chrClass.getName() + ")");
         }
 
-        /** Отладочная галка DisableRagdolls: цепочка недоступна — считаем, что не выключено. */
+        /** DisableRagdolls debug checkbox; if the chain is unreachable, assume it is not set. */
         private static boolean isRagdollsDisabledInDebug() {
             try {
                 Class<?> dbg = Class.forName("zombie.debug.DebugOptions");

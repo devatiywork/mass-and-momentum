@@ -5,29 +5,29 @@ import java.lang.reflect.Method;
 import me.zed_0xff.zombie_buddy.Patch;
 
 /**
- * Настоящий объём топливного бака, ключ {@code tank} в конфиге.
+ * Real fuel tank volume, the {@code tank} key in the config.
  *
- * Зачем. Массу мы машинам подняли до паспортной, а бак у всех остался ванильный
- * автомобильный: у Bushmaster стоит предмет {@code BigGasTank1} с {@code MaxCapacity = 59}.
- * У настоящего бак на 319 литров и запас хода 800 км. Без этой правки получается
- * бессмыслица: расход грузовой, а бак легковой, и машина не уезжает никуда.
+ * Why. We raised vehicle masses to their spec values, but every tank stayed a vanilla car
+ * tank: the Bushmaster has the item {@code BigGasTank1} with {@code MaxCapacity = 59}.
+ * The real one has a 319-litre tank and an 800 km range. Without this fix the result is
+ * nonsense: truck consumption with a car tank, and the vehicle gets nowhere.
  *
- * Где берётся ёмкость:
+ * Where the capacity comes from:
  * <pre>
  * // VehiclePart.getContainerCapacity(IsoGameCharacter)
  * return conditionAffectsCapacity
  *      ? (int) getNumberByCondition(item.getMaxCapacity(), getCondition(), 5.0F)
  *      : item.getMaxCapacity();
  * </pre>
- * Можно было бы позвать {@code item.setMaxCapacity(319)}, но это свойство предмета,
- * и оно попало бы в сейв навсегда — бак остался бы большим даже после выключения мода.
- * Поэтому подменяем возвращаемое значение, ничего не записывая.
+ * We could call {@code item.setMaxCapacity(319)}, but that is a property of the item,
+ * and it would go into the save for good: the tank would stay big even after the mod is off.
+ * So we replace the return value without writing anything.
  *
- * Метод перегружен (с персонажем и без), поэтому advice написан без обращения к
- * аргументам — только {@code @Patch.This} и возврат. Тогда обе перегрузки патчатся
- * безопасно: внешняя просто делегирует внутренней и получит то же число.
+ * The method is overloaded (with and without a character), so the advice does not touch the
+ * arguments: only {@code @Patch.This} and the return value. That way both overloads are patched
+ * safely: the outer one simply delegates to the inner one and gets the same number.
  *
- * ВАЖНО: тело exit() встраивается ByteBuddy — только public-члены, никаких лямбд.
+ * IMPORTANT: ByteBuddy inlines the body of exit(): public members only, no lambdas.
  */
 @Patch(className = "zombie.vehicles.VehiclePart", methodName = "getContainerCapacity", warmUp = true)
 public class Patch_tankCapacity {
@@ -74,11 +74,11 @@ public class Patch_tankCapacity {
                 if (rule == null || rule.tank <= 0.0f) {
                     return vanilla;
                 }
-                // Ваниль уменьшает ёмкость по состоянию детали — сохраняем это поведение.
+                // Vanilla reduces the capacity by part condition; we keep that behaviour.
                 int cond = ((Integer) mGetCondition.invoke(part)).intValue();
                 int result = Math.round(rule.tank * Math.max(cond, 5) / 100.0f);
-                // По машине, а не по последней виденной: иначе две машины рядом
-                // чередуются и пишут в лог каждый кадр.
+                // Per vehicle, not by the last one seen: otherwise two vehicles side by side
+                // take turns and write to the log every frame.
                 if (LOGGED.add(name)) {
                     Log.debug("[LabVehiclePhysics] fuel tank: " + name + " " + vanilla
                             + " -> " + result + " L (spec " + VehicleCfg.fmt(rule.tank)

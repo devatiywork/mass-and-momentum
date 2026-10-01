@@ -9,70 +9,70 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 
 /**
- * Снятие предела силы подвески — правкой памяти, а не файла.
+ * Lifts the suspension force limit by patching memory, not the file.
  *
- * <h2>Что правим</h2>
- * В {@code PZBullet64.dll} инлайнен стоковый конструктор {@code btVehicleTuning}:
+ * <h2>What we patch</h2>
+ * {@code PZBullet64.dll} has the stock {@code btVehicleTuning} constructor inlined:
  * <pre>
  * 48 B8 00 00 00 00 00 70 B7 40    movabs rax, 6000.0      ; m_maxSuspensionForce
  * 49 89 45 28                      mov [r13+0x28], rax
  * </pre>
- * При гравитации 10 предел 6000 на колесо ограничивает несущую способность подвески
- * 2400 килограммами. Из-за этого весь автопарк игры втиснут в 650..1160 кг, а машина
- * с настоящей массой проваливается сквозь землю. Подробности — Docs/dll-suspension-limit.md.
+ * With gravity at 10, a limit of 6000 per wheel caps the suspension's load capacity at
+ * 2400 kilograms. Because of this the game's entire fleet is squeezed into 650..1160 kg, and a
+ * vehicle with its real mass sinks through the ground. Details: Docs/dll-suspension-limit.md.
  *
- * <h2>Почему в памяти, а не в файле</h2>
- * Правка файла работает, но распространять её нельзя: игра грузит библиотеку из папки
- * установки, а не из папки модов; проверка целостности Steam вернёт оригинал; обновление
- * игры затрёт правку. Правка памяти ничего этого не боится и остаётся обычным Java-модом.
+ * <h2>Why in memory and not in the file</h2>
+ * Patching the file works, but it cannot be distributed: the game loads the library from the
+ * install folder, not the mods folder; Steam's integrity check restores the original; a game
+ * update wipes the patch. A memory patch is immune to all of this and remains a plain Java mod.
  *
- * <h2>Поиск по данным, а не по коду</h2>
- * Фиксированное смещение верно только для 42.20.4, поэтому ищем. Но искать по байтам
- * инструкции нельзя: в {@code 48 B8 ... 49 89 45 28} регистры {@code rax} и {@code r13}
- * выбрал компилятор, а не программист. Достаточно пересобрать библиотеку другой версией
- * MSVC, ничего не меняя в исходниках, и кодировка станет другой.
+ * <h2>Search by data, not by code</h2>
+ * A fixed offset is only valid for 42.20.4, so we search. But searching by the instruction bytes
+ * is not an option: in {@code 48 B8 ... 49 89 45 28} the registers {@code rax} and {@code r13}
+ * were chosen by the compiler, not the programmer. Rebuilding the library with another MSVC
+ * version, without changing anything in the sources, is enough to change the encoding.
  *
- * Поэтому опираемся на сами числа. Конструктор выставляет шесть значений подряд:
+ * So we rely on the numbers themselves. The constructor sets six values in a row:
  * <pre>
  * 5.88   0.83   0.88   500   10.5   6000
  * </pre>
- * Это 8-байтовые {@code double}, и от регистров они не зависят вообще. Каждое встречается
- * в библиотеке ровно один раз — проверено поиском. Алгоритм: найти 6000.0 и убедиться,
- * что рядом лежат остальные пять. Совпадение по шести числам сразу случайным не бывает.
+ * These are 8-byte {@code double} values and do not depend on registers at all. Each occurs
+ * exactly once in the library, verified by searching. The algorithm: find 6000.0 and check
+ * that the other five lie nearby. A match on all six numbers at once is never accidental.
  *
- * Такой поиск переживает и смену регистров, и смену компилятора, и перенос констант
- * из тела инструкций в пул данных .rdata.
+ * Such a search survives a change of registers, a change of compiler, and the constants moving
+ * from the instruction bodies into the .rdata data pool.
  *
- * <h2>Предохранитель</h2>
- * Правка применяется, только если мод разрешён (см. {@link LabGate}). На чужом сервере
- * без мода библиотека останется нетронутой.
+ * <h2>Safety gate</h2>
+ * The patch is applied only if the mod is allowed (see {@link LabGate}). On someone else's
+ * server without the mod the library stays untouched.
  *
- * <h2>Требования</h2>
- * Foreign Function &amp; Memory API (Java 22+). Игра работает на Java 25, этот класс
- * собирается под {@code --release 25}, остальной мод — под 17.
- * Нужен флаг {@code --enable-native-access=ALL-UNNAMED}, иначе JVM ругнётся
- * предупреждением на ограниченные методы.
+ * <h2>Requirements</h2>
+ * Foreign Function &amp; Memory API (Java 22+). The game runs on Java 25; this class is
+ * compiled with {@code --release 25}, the rest of the mod with 17.
+ * The {@code --enable-native-access=ALL-UNNAMED} flag is required, otherwise the JVM prints
+ * a warning about restricted methods.
  */
 public final class NativePatch {
 
     public static final String MODULE = "PZBullet64.dll";
 
     /**
-     * Соседи по конструктору btVehicleTuning: suspensionStiffness, suspensionCompression,
-     * suspensionDamping, maxSuspensionTravelCm, frictionSlip. Все — стоковые дефолты Bullet.
+     * Neighbours in the btVehicleTuning constructor: suspensionStiffness, suspensionCompression,
+     * suspensionDamping, maxSuspensionTravelCm, frictionSlip. All are stock Bullet defaults.
      */
     public static final double[] NEIGHBOURS = {5.88, 0.83, 0.88, 500.0, 10.5};
-    /** В каком окне вокруг константы искать соседей. Хватает и для инлайна, и для пула .rdata. */
+    /** Neighbour search window around the constant. Covers both inlined code and the .rdata pool. */
     public static final int WINDOW = 256;
-    /** Сколько соседей из пяти должно найтись. Один запас на случай, если что-то поменяют. */
+    /** How many of the five neighbours must be found. One spare in case something changes. */
     public static final int MIN_NEIGHBOURS = 4;
 
-    /** Новый предел: 500 000 на колесо при гравитации 10 — это 200 тонн. */
+    /** New limit: 500 000 per wheel at gravity 10, which is 200 tonnes. */
     public static final double NEW_LIMIT = 500000.0;
     public static final double OLD_LIMIT = 6000.0;
 
     public static final int PAGE_EXECUTE_READWRITE = 0x40;
-    /** Смещения в PE-заголовке. */
+    /** Offsets in the PE header. */
     public static final long E_LFANEW = 0x3C;
     public static final long SIZE_OF_IMAGE = 0x50;
 
@@ -82,7 +82,7 @@ public final class NativePatch {
     private NativePatch() {
     }
 
-    /** Вызывается из патча создания физики — к этому моменту библиотека точно загружена. */
+    /** Called from the physics creation patch; by then the library is certainly loaded. */
     public static void ensure() {
         if (done || failed || !LabGate.active()) {
             return;
@@ -150,10 +150,10 @@ public final class NativePatch {
             throw new IllegalStateException("VirtualProtect failed to unprotect the page");
         }
 
-        // JAVA_DOUBLE требует адрес, кратный восьми, а константа лежит ВНУТРИ инструкции
-        // movabs, то есть по произвольному адресу. Поэтому невыровненная раскладка.
-        // Защиту возвращаем в finally: если запись упадёт, страница не должна остаться
-        // доступной на запись.
+        // JAVA_DOUBLE needs an address divisible by eight, but the constant sits INSIDE the
+        // movabs instruction, i.e. at an arbitrary address. Hence the unaligned layout.
+        // Protection is restored in finally: if the write fails, the page must not be left
+        // writable.
         try {
             MemorySegment.ofAddress(target).reinterpret(8L)
                     .set(ValueLayout.JAVA_DOUBLE_UNALIGNED, 0L, NEW_LIMIT);
@@ -177,7 +177,7 @@ public final class NativePatch {
                 OLD_LIMIT, NEW_LIMIT, MODULE, base, at);
     }
 
-    /** Размер загруженного образа из PE-заголовка: e_lfanew по base+0x3C, SizeOfImage по NT+0x50. */
+    /** Size of the loaded image from the PE header: e_lfanew at base+0x3C, SizeOfImage at NT+0x50. */
     public static int readImageSize(long base) {
         MemorySegment dos = MemorySegment.ofAddress(base).reinterpret(0x1000L);
         int lfanew = dos.get(ValueLayout.JAVA_INT_UNALIGNED, E_LFANEW);
@@ -193,14 +193,14 @@ public final class NativePatch {
     }
 
     /**
-     * Найти предел силы подвески по окружению.
+     * Finds the suspension force limit by its surroundings.
      *
-     * Ищем все вхождения искомого числа как 8-байтового double и для каждого считаем,
-     * сколько соседних констант конструктора лежит в пределах окна. Проходит только
-     * кандидат, у которого соседей не меньше {@link #MIN_NEIGHBOURS}. Если таких
-     * кандидатов несколько — отказываемся: лучше не тронуть, чем испортить не то место.
+     * Looks for every occurrence of the value as an 8-byte double and, for each, counts how many
+     * neighbouring constructor constants lie within the window. Only a candidate with at least
+     * {@link #MIN_NEIGHBOURS} neighbours passes. If there are several such candidates, it
+     * refuses: better to touch nothing than to corrupt the wrong place.
      *
-     * @return смещение первого байта константы в образе, либо -1
+     * @return offset of the constant's first byte in the image, or -1
      */
     public static int findTuningConstant(byte[] image, double value) {
         byte[] needle = doubleBytes(value);
