@@ -4,6 +4,7 @@ title=Mass & Momentum: Vehicle Physics
 description=[h1]Mass & Momentum: Vehicle Physics[/h1]
 description=Vehicles get their real weight, from a 950 kg city car to a 52 t tank, and the physics finally uses it. A tank ploughs through a horde, a hatchback gets stuck in it. Nothing depends on your FPS any more.
 description=[b]Works with [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528]Project Viewpoint[/url][/b], tested together on 42.21.
+description=[b]Source code (MIT):[/b] [url=https://github.com/devatiywork/mass-and-momentum]github.com/devatiywork/mass-and-momentum[/url]
 description=
 description=[h2]What changes[/h2]
 description=[list]
@@ -51,6 +52,7 @@ description=[hr][/hr]
 description=[h1]Mass & Momentum: физика транспорта[/h1]
 description=Машины получают настоящий вес, от 950 кг у малолитражки до 52 т у танка. Танк проходит сквозь орду, хэтчбек в ней вязнет. От FPS ничего не зависит.
 description=[b]Совместим с [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528]Project Viewpoint[/url][/b], проверено на 42.21.
+description=[b]Исходный код (MIT):[/b] [url=https://github.com/devatiywork/mass-and-momentum]GitHub[/url]
 description=[list]
 description=[*][b]Массы[/b] ванильных машин, военных модов и KI5, остальным — пресет по типу. Предел подвески 2400 кг снят в памяти.
 description=[*][b]Наезд[/b] — от скорости и приведённой массы, скорость выше 54 км/ч считается, зомби весят по-разному.
