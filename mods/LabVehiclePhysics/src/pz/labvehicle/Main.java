@@ -44,12 +44,17 @@ public class Main {
         "zombie.characters.IsoPlayer",
         // Co-op server with ZombieBuddy: starting the server from the "Host" menu.
         "zombie.network.CoopMaster",
+        // A heavy vehicle knocks a zombie over at any speed (its own override of the stance check).
+        "zombie.characters.IsoZombie",
     };
 
     public static void main(String[] args) {
-        Log.info("[LabVehiclePhysics] loaded (stages 1 + 1.5 + 1.6 + 1.7 + 1.8 + 3.0): zombie mass with spread + honest frame timing, "
+        Log.info("[LabVehiclePhysics] loaded (stages 1 + 1.5 + 1.6 + 1.7 + 1.8 + 1.9 + 3.0): zombie mass with spread + honest frame timing, "
                 + "speed ceiling of 15 removed, reduced mass drives impact while chassis mass drives deceleration, prone bodies no longer bounce with FPS, "
-                + "one zombie pushes the vehicle once, the corpse follows its ragdoll, vehicle masses from vehicle-physics.cfg, "
+                + "one zombie pushes the vehicle once and only for the speed it lacks, run-over bodies are crushed by the vehicle's weight, "
+                + "tracked vehicles crush along their tracks, heavy vehicles knock zombies over at any speed, dead bodies under a vehicle stop being ragdolls, "
+                + "placeholder wheel models are not added (3D renderers no longer drop tracked vehicles), "
+                + "the corpse follows its ragdoll, vehicle masses from vehicle-physics.cfg, "
                 + "vehicle floor, live power and brakes, animal hits by mass and speed, bushes by energy, heavy vehicles break trees, "
                 + "settings on the sandbox page, in multiplayer the corpse lies where the hit body landed, "
                 + "NaN tripwire on vehicle and player positions, the co-op server gets ZombieBuddy");

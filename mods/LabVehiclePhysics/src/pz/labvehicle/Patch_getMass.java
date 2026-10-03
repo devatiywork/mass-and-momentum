@@ -30,6 +30,10 @@ import me.zed_0xff.zombie_buddy.Patch;
  * Mathematically this is identical to multiplying the impulse itself; the hook point is just
  * more convenient: getMass() is short and has no other consumers.
  *
+ * 3. RELATIVE SPEED (stage 1.9). Patch_impulseBudget runs on entry to the same vanilla method,
+ *    right before this call, and leaves pendingRel = (v − u) / v: the share of the impulse the
+ *    body can still take (see there). It is consumed here and reset to 1.
+ *
  * IMPORTANT: ByteBuddy inlines the body of exit() into getMass(), so public members only
  * and no lambdas.
  */
@@ -52,6 +56,8 @@ public class Patch_getMass {
         public static final float FRAME_MAX = 2.0f;
 
         public static volatile boolean broken = false;
+        /** Relative-speed share left by Patch_impulseBudget for the impulse being computed now. */
+        public static float pendingRel = 1.0f;
         public static Method gtGetInstance;
         public static Method gtRealSeconds;
         public static boolean logged = false;
@@ -61,6 +67,8 @@ public class Patch_getMass {
         public static long lastReportNanos = 0L;
 
         public static float adjust(Object chr, float vanilla) {
+            float rel = pendingRel;
+            pendingRel = 1.0f;
             if (!LabGate.active() || !LabSettings.zombieImpact()) {
                 return vanilla;
             }
@@ -74,7 +82,7 @@ public class Patch_getMass {
                 calls++;
                 sumFrame += frame;
                 report();
-                return vanilla * spread * frame;
+                return vanilla * spread * frame * rel;
             } catch (Throwable t) {
                 broken = true;
                 Log.info("[LabVehiclePhysics] ERROR in the mass patch, disabling: " + t);

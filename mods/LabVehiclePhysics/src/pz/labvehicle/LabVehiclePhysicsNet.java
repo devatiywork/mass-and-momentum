@@ -67,6 +67,25 @@ public final class LabVehiclePhysicsNet {
         return LabSettings.fuelByMass();
     }
 
+    /**
+     * The detailed log is on: the lab build, or the JVM option -Dlabvehicle.verbose=true. Lua files
+     * write their instrument lines only then, as {@link Log#debug} does; see
+     * {@code LabVehiclePhysics_TurretSight.lua}.
+     */
+    public static boolean verbose() {
+        return Log.VERBOSE;
+    }
+
+    /** The player's look angle as the game's method answers it, degrees; see {@link ViewAngle}. */
+    public static double lookAngle(Object player) {
+        return ViewAngle.look(player);
+    }
+
+    /** The same look angle by the game's own formula; differing from {@link #lookAngle}, a 3D view is on. */
+    public static double gameLookAngle(Object player) {
+        return ViewAngle.game(player);
+    }
+
     // ---- "Vehicle Physics: vehicles" panel (LabVehiclePhysics_VehicleTable.lua), see VehicleTable
 
     /** All vehicles: array of {name, full, mod, vanilla}; null on failure, reason in the log. */

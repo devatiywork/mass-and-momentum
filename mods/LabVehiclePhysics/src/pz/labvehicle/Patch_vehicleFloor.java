@@ -43,6 +43,10 @@ public class Patch_vehicleFloor {
     @Patch.OnExit
     public static void exit(@Patch.This Object vehicle) {
         Impl.keepAboveGround(vehicle);
+        if (LabGate.active() && LabSettings.zombieImpact()) {
+            TrackFootprint.releaseDeadRagdolls(vehicle);
+        }
+        VehicleDrawCheck.maybe(vehicle);
     }
 
     public static final class Impl {

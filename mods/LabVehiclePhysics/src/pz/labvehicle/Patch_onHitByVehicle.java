@@ -76,6 +76,9 @@ public class Patch_onHitByVehicle {
         public static Field dirX, dirY;
         public static long hits = 0L;
         public static int logged = 0;
+        /** The character this hit is for and the vehicle's mass: read by Patch_pushKnockdown. */
+        public static Object lastCharacter;
+        public static float lastVehicleMass;
 
         /** @return the new hitForce value. Side effect: fixes the length of the push vector. */
         public static float rewrite(Object character, Object vehicle, float vanillaForce, Object hitDir) {
@@ -104,6 +107,8 @@ public class Patch_onHitByVehicle {
                 }
 
                 float vehicleMass = ((Float) vGetFudgedMass.invoke(vehicle)).floatValue();
+                lastCharacter = character;
+                lastVehicleMass = vehicleMass;
                 float bodyMass = bodyMassFor(character);
                 float factor = reducedMassFactor(vehicleMass, bodyMass);
                 float uncappedImpact = speed * factor;
