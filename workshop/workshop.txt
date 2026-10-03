@@ -24,7 +24,7 @@ description=[/list]
 description=
 description=[h2]What changes[/h2]
 description=[list]
-description=[*][b]Real masses[/b] for the vanilla fleet and popular military and KI5 mods, other vehicles get a type preset. The engine's hidden 2,400 kg suspension limit is lifted in memory, game files stay untouched.
+description=[*][b]Real masses[/b] for the vanilla fleet and popular military and KI5 mods. Other vehicles keep their own weight; any of them can get a type preset on the sandbox page. The engine's hidden 2,400 kg suspension limit is lifted in memory, game files stay untouched.
 description=[*][b]Hitting zombies[/b]: the impact comes from speed and the reduced mass of vehicle and body. Speed above 54 km/h counts now, FPS no longer matters, zombies have different body weight.
 description=[*][b]Bushes and trees[/b]: a bush takes energy instead of capping your speed. A heavy vehicle fells trees by pushing or ramming, the server decides in multiplayer.
 description=[*][b]Animals[/b] brake the vehicle by their weight and take damage by speed and mass instead of dying instantly.
@@ -63,7 +63,7 @@ description=Нужны Build 42.21 и [url=https://steamcommunity.com/sharedfile
 description=[b]Рэгдоллы[/b]: каждому игроку включить Настройки / «Экран и производительность» / [b]«Использовать рэгдолл-физику»[/b]. В сети галка показана снятой, и «Применить» её выключает — проверьте один раз. Серверу — [b]UsePhysicsHitReaction=true[/b].
 description=[b]Новое в 1.0.2[/b]: машина не встаёт в толпе — зомби толкает её один раз, тела под днищем давятся весом, гусеницы давят всей длиной, мёртвые рэгдоллы под машиной становятся трупами. Тяжёлая машина сбивает зомби с ног и на малой скорости. Танки MTK видны в 3D Viewpoint, башни наводятся на курсор.
 description=[list]
-description=[*][b]Массы[/b] ванильных машин, военных модов и KI5, остальным — пресет по типу.
+description=[*][b]Массы[/b] ванильных машин, военных модов и KI5; остальные сохраняют свой вес, любой можно назначить пресет по типу на странице песочницы.
 description=[*][b]Наезд[/b] — от скорости и приведённой массы, FPS не влияет. [b]Кусты[/b] забирают энергию, тяжёлая машина валит [b]деревья[/b].
 description=[*][b]Животные[/b] тормозят машину по весу. [b]Топливо[/b]: настоящие баки, расход растёт с массой.
 description=[*][b]Сеть[/b]: труп там, где упало тело. [b]Настройки[/b] — на страницах песочницы.
