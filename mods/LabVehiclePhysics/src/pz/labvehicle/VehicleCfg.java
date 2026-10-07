@@ -39,6 +39,10 @@ import java.util.Map;
  *   <li>{@code engine=auto}: thrust is multiplied by the same ratio, so acceleration
  *       stays the same. {@code engine=keep} (the default): thrust is left alone,
  *       and the heavier vehicle accelerates worse, as in real life.</li>
+ *   <li>{@code maxSpeed}: the real top speed in km/h. The game's {@code maxSpeed} is where the
+ *       thrust starts fading out ({@link #TOP_SPEED_FADE} below the speed the vehicle ends up
+ *       at), so the script gets maxSpeed - 20. The built-in data does not change it on vanilla
+ *       vehicles: they keep the game's own top speed.</li>
  *   <li>{@code live}: the mass is also substituted on the fly in {@code getFudgedMass()},
  *       which the game hands to Bullet every frame. The file is re-read every two
  *       seconds, so the number can be tuned right during play, without a restart.
@@ -227,8 +231,6 @@ public final class VehicleCfg {
     public static volatile boolean hasService = false;
     /** Whether any rules change the tank capacity. */
     public static volatile boolean hasTank = false;
-    /** The largest tank capacity among the rules: the clamp on tank items is raised up to it. */
-    public static volatile int largestTank = 0;
     /** Grows on every file re-read: consumers reset their caches by it. */
     public static volatile int generation = 0;
 
@@ -336,16 +338,36 @@ public final class VehicleCfg {
     }
 
     /**
+     * Weight of the installed parts the game adds on top of the script mass
+     * ({@code BaseVehicle.updateTotalMass}: every part item plus container contents). Our logs show
+     * 250..330 kg on vanilla vehicles; the physics accelerates script mass PLUS this.
+     */
+    public static final float PARTS_MASS = 310.0f;
+
+    /** Vanilla already multiplies thrust by this in first gear ({@code CarController}: Speed1 -> 1.5). */
+    public static final float VANILLA_FIRST_GEAR = 1.5f;
+
+    /**
+     * Vanilla {@code maxSpeed} is not a top speed: above it the thrust fades out linearly and
+     * reaches zero this many km/h higher ({@code CarController}: F x (maxSpeed + 20 - v) / 20).
+     * There is no air drag, so every vehicle ends up at maxSpeed + 20.
+     */
+    public static final float TOP_SPEED_FADE = 20.0f;
+
+    /**
      * How much in-game thrust corresponds to one horsepower.
      *
-     * Derived from the vanilla passenger car: it has 4000 units of thrust for 800 kg, i.e. 5.00
-     * per kg, against 140 hp for 1350 kg in a real sedan. Required thrust for any vehicle:
+     * Derived from the vanilla passenger car: 4000 units of thrust, and the physics weighs it with
+     * its parts, 800 + {@link #PARTS_MASS} = 1110 kg, i.e. 3.60 per kg, against 140 hp for 1350 kg
+     * in a real sedan. Required thrust for any vehicle:
      * <pre>
-     *   5.00 x [(hp/kg) / (140/1350)] x kg  =  5.00 x 1350/140 x hp  =  48.2 x hp
+     *   3.60 x [(hp/kg) / (140/1350)] x physical kg  =  34.75 x hp x physical kg / kg
      * </pre>
-     * The mass cancels out: in-game thrust should simply be proportional to power.
+     * where kg is the rated mass from the table and physical kg is the mass the physics really
+     * moves (script mass + parts). The first version took the script mass, 800 kg, as the car's
+     * weight: 48.2 per hp, and every vehicle pulled 1.39 times too hard.
      */
-    public static final float FORCE_PER_HP = 5.0f * 1350.0f / 140.0f;
+    public static final float FORCE_PER_HP = 4000.0f / (800.0f + PARTS_MASS) * 1350.0f / 140.0f;
 
     /**
      * Thrust multiplier, in whatever form thrust was specified.
@@ -363,8 +385,13 @@ public final class VehicleCfg {
         }
         if (rule.powerHp > 0.0f) {
             float vanillaForce = vanillaValue(scriptName, "engineForce");
-            if (vanillaForce > 0.0f) {
-                return FORCE_PER_HP * rule.powerHp / vanillaForce;
+            float vanillaMass = vanillaValue(scriptName, "mass");
+            float rated = rule.mass > 0.0f ? rule.mass : vanillaMass;
+            if (vanillaForce > 0.0f && rated > 0.0f) {
+                // The mass the script really got: capped where the suspension limit stays, and
+                // then the thrust is cut in the same proportion (same pull per kg everywhere).
+                float carried = rule.mass > 0.0f ? SuspensionCap.cached(scriptName, rule.mass, vanillaMass) : vanillaMass;
+                return FORCE_PER_HP * rule.powerHp * (carried + PARTS_MASS) / rated / vanillaForce;
             }
         }
         return 1.0f;
@@ -433,10 +460,16 @@ public final class VehicleCfg {
         return prev != null ? prev : values;
     }
 
-    public static void restoreFields(Object script, float[] original) throws Exception {
+    /**
+     * @param scale 1 before {@code Loaded()} has scaled the script, its model scale after: the
+     *     originals are remembered unscaled, and travel and spring length (the last two
+     *     {@link #SCRIPT_FIELDS}) are the fields {@code Loaded()} multiplies by it.
+     */
+    public static void restoreFields(Object script, float[] original, float scale) throws Exception {
         Class<?> cls = script.getClass();
         for (int i = 0; i < SCRIPT_FIELDS.length; i++) {
-            field(cls, SCRIPT_FIELDS[i]).setFloat(script, original[i]);
+            boolean scaledField = i >= 4;   // maxSuspensionTravelCm, suspensionRestLength
+            field(cls, SCRIPT_FIELDS[i]).setFloat(script, scaledField ? original[i] * scale : original[i]);
         }
     }
 
@@ -473,7 +506,11 @@ public final class VehicleCfg {
             }
         }
         if (vanilla > 0.0f) {
-            return rule.mass / vanilla;
+            // The mass the vehicle really gets: capped where the suspension limit stays. Both
+            // sides carry the parts as well (PARTS_MASS): braking and pull are divided by what
+            // the physics moves, not by the script mass.
+            float carried = SuspensionCap.cached(scriptName, rule.mass, vanilla);
+            return (carried + PARTS_MASS) / (vanilla + PARTS_MASS);
         }
         return rule.ratio > 0.0f ? rule.ratio : 1.0f;
     }
@@ -801,7 +838,6 @@ public final class VehicleCfg {
         boolean tuning = false;
         boolean svc = false;
         boolean tank = false;
-        float biggest = 0.0f;
         List<Rule> all = new ArrayList<Rule>(rules);
         all.addAll(defaults);
         all.addAll(LuaRegistry.entries.values());
@@ -821,15 +857,11 @@ public final class VehicleCfg {
             tuning |= r0.hasPower() || r0.brakeMul != null || r0.lowGear > 0.0f;
             svc |= r0.service;
             tank |= r0.tank > 0.0f;
-            if (r0.tank > biggest) {
-                biggest = r0.tank;
-            }
         }
         hasLive = live;
         hasTuning = tuning;
         hasService = svc;
         hasTank = tank;
-        largestTank = Math.round(biggest);
     }
 
     /** Merged-rule cache by script name. {@link #NONE}: no rule. Cleared when generation changes. */
@@ -1149,7 +1181,11 @@ public final class VehicleCfg {
      */
     public static Rule resolveLayers(String name, boolean withTable, Rule tableRow) {
         String bare = bareName(name);
-        Rule builtin = withPreset(!useBuiltinForVanilla && isVanillaScript(name) ? null : firstMatch(defaults, name, bare));
+        boolean vanillaScript = isVanillaScript(name);
+        Rule builtin = withPreset(!useBuiltinForVanilla && vanillaScript ? null : firstMatch(defaults, name, bare));
+        if (vanillaScript) {
+            builtin = withoutTopSpeed(builtin);
+        }
         Rule author = LuaRegistry.entries.get(bare);
         Rule player = withPreset(firstMatch(rules, name, bare));
         Rule table = tableRow != null ? withPreset(tableRow)
@@ -1165,6 +1201,29 @@ public final class VehicleCfg {
             r = r == null ? table : Rule.merge(table, r);
         }
         return r;
+    }
+
+    /** Built-in rules without their top speed, one copy per rule (so its mass line prints once). */
+    public static final Map<Rule, Rule> NO_TOP_SPEED = new java.util.WeakHashMap<Rule, Rule>();
+
+    /**
+     * The rule without a top speed. Vanilla vehicles keep the game's own top speed even with the
+     * mod's reference data (decision of 04.10.2026: the game's balance stays as it is); only an
+     * explicit choice (author data, the player's file, the sandbox table) changes it.
+     */
+    public static Rule withoutTopSpeed(Rule r) {
+        if (r == null || r.maxSpeed <= 0.0f) {
+            return r;
+        }
+        synchronized (NO_TOP_SPEED) {
+            Rule c = NO_TOP_SPEED.get(r);
+            if (c == null) {
+                c = new Rule(r.glob, r.mass, r.stiffness, r.engine, 0.0f, r.travel, r.rest, r.powerMul, r.powerHp,
+                        r.brakeMul, r.lowGear, r.lowGearToRaw, r.service, r.tank, r.live, r.category, r.source);
+                NO_TOP_SPEED.put(r, c);
+            }
+            return c;
+        }
     }
 
     /** Lines of the sandbox table ({@link VehicleTable}), the top layer. Replaced as a whole. */
@@ -1207,9 +1266,33 @@ public final class VehicleCfg {
 
     /**
      * Rewrites VehicleScript fields before {@code Loaded()} sends them to Bullet.
-     * Called once per vehicle script when the game loads.
+     * Called once per vehicle script when the game loads, from the hook on {@code Loaded()}.
      */
     public static void applyToScript(Object script) {
+        applyToScript(script, false);
+    }
+
+    public static Method mModelScale;
+
+    /** The script's model scale; {@code Loaded()} multiplies travel and spring length by it. */
+    public static float modelScale(Object script) throws Exception {
+        if (mModelScale == null) {
+            mModelScale = script.getClass().getMethod("getModelScale");
+        }
+        float s = ((Float) mModelScale.invoke(script)).floatValue();
+        return s > 0.0f ? s : 1.0f;
+    }
+
+    /**
+     * @param scaled whether the game's {@code Loaded()} has already multiplied the script by its
+     *     model scale. False in the hook on {@code Loaded()} (it runs on entry), true on the walk
+     *     that re-applies all scripts when the server table, author data or the sandbox table
+     *     change. The original values are remembered on entry to {@code Loaded()}, i.e. unscaled,
+     *     so on the walk travel and spring length are scaled by hand. Until 04.10.2026 they were
+     *     restored unscaled: after any such walk every vehicle created later got 1/1.82 of its
+     *     travel and spring length (10 cm instead of 18.2 on vanilla), and the wheels sank.
+     */
+    public static void applyToScript(Object script, boolean scaled) {
         if (!LabGate.active()) {
             return;
         }
@@ -1221,22 +1304,24 @@ public final class VehicleCfg {
             noteScriptOrigin(script, name);
             // Original values of all the fields we touch, from before our first write.
             float[] original = rememberOriginalFields(script, name);
+            float scale = scaled ? modelScale(script) : 1.0f;
             Rule rule = forName(name);
             if (rule == null || (rule.mass <= 0.0f && rule.travel <= 0.0f && rule.rest <= 0.0f
                     && rule.stiffness == null && rule.engine == null && rule.maxSpeed <= 0.0f)) {
                 // The rule is gone: a sandbox switch, a file edit, a different server
                 // table. If we wrote to this script, give it back the game's values.
                 if (WRITTEN.remove(bareName(name))) {
-                    restoreFields(script, original);
+                    restoreFields(script, original, scale);
                     restoredCount++;
                     appliedCount++;      // so that the walk resends the script to Bullet
                 }
+                SuspensionHeadroom.apply(script, name, original, null, scale);
                 return;
             }
             Class<?> cls = script.getClass();
             // First everything back to the original values: a field the rule no longer sets must
             // not keep our previous value.
-            restoreFields(script, original);
+            restoreFields(script, original, scale);
             Field fMass = field(cls, "mass");
             float oldMass = fMass.getFloat(script);
             if (oldMass <= 0.0f) {
@@ -1255,10 +1340,13 @@ public final class VehicleCfg {
             // fMass.setFloat(script, 0): the vehicle got zero mass. The config had no such
             // rules, but for mod authors mass is optional: a mod is free to send
             // only a tank capacity and a top speed.
-            float k = (rule.mass > 0.0f && vanillaMass > 0.0f) ? rule.mass / vanillaMass : 1.0f;
+            // Where the suspension force limit stays (not Windows, or the in-memory patch failed),
+            // the mass is capped to what the stock suspension carries; see SuspensionCap.
+            float mass = SuspensionCap.limit(script, name, rule.mass, vanillaMass);
+            float k = (mass > 0.0f && vanillaMass > 0.0f) ? mass / vanillaMass : 1.0f;
             rule.ratio = k;
-            if (rule.mass > 0.0f) {
-                fMass.setFloat(script, rule.mass);
+            if (mass > 0.0f) {
+                fMass.setFloat(script, mass);
             }
 
             float oldStiff = 0.0f;
@@ -1280,22 +1368,27 @@ public final class VehicleCfg {
             }
 
             if (rule.maxSpeed > 0.0f) {
+                // The table holds the real top speed; the game's maxSpeed is where the thrust
+                // starts fading out, 20 km/h below the speed the vehicle ends up at.
                 Field fSpeed = field(cls, "maxSpeed");
-                fSpeed.setFloat(script, rule.maxSpeed);
+                fSpeed.setFloat(script, Math.max(5.0f, rule.maxSpeed - TOP_SPEED_FADE));
             }
 
+            // Travel and spring length in the rule are script values, like everything in the
+            // script file: Loaded() multiplies them by the model scale, and on the walk we do.
             float oldTravel = 0.0f;
             if (rule.travel > 0.0f) {
                 Field fTravel = field(cls, "maxSuspensionTravelCm");
-                oldTravel = fTravel.getFloat(script);
-                fTravel.setFloat(script, rule.travel);
+                oldTravel = original[4];
+                fTravel.setFloat(script, rule.travel * scale);
             }
             float oldRest = 0.0f;
             if (rule.rest > 0.0f) {
                 Field fRest = field(cls, "suspensionRestLength");
-                oldRest = fRest.getFloat(script);
-                fRest.setFloat(script, rule.rest);
+                oldRest = original[5];
+                fRest.setFloat(script, rule.rest * scale);
             }
+            SuspensionHeadroom.apply(script, name, original, rule, scale);
             WRITTEN.add(bareName(name));
 
             rule.matched++;
@@ -1304,7 +1397,7 @@ public final class VehicleCfg {
                 rule.printed = true;
                 StringBuilder sb = new StringBuilder();
                 sb.append("[LabVehiclePhysics] mass: ").append(name)
-                  .append("  ").append(fmt(oldMass)).append(" -> ").append(fmt(rule.mass))
+                  .append("  ").append(fmt(oldMass)).append(" -> ").append(fmt(mass))
                   .append(" kg (x").append(fmt(k)).append(")");
                 if (rule.stiffness != null) {
                     sb.append(", suspension ").append(fmt(oldStiff)).append(" -> ").append(fmt(newStiff));
@@ -1366,7 +1459,7 @@ public final class VehicleCfg {
                     continue;
                 }
                 int before = appliedCount;
-                applyToScript(script);
+                applyToScript(script, true);
                 if (appliedCount > before) {
                     done++;
                     if (!onServer) {
@@ -1440,7 +1533,9 @@ public final class VehicleCfg {
                 : "server table not received yet";
         Log.info("[LabVehiclePhysics] vehicle data: built-in rules " + defaults.size()
                 + ", " + top + ", mod author entries " + LuaRegistry.entries.size()
-                + ", vehicle scripts rewritten " + appliedCount);
+                + ", vehicle scripts rewritten " + appliedCount
+                + (SuspensionHeadroom.DISABLED ? ", suspension headroom off"
+                        : ", longer suspension travel for " + SuspensionHeadroom.ADJUSTED.size()));
         printAudit();
     }
 
@@ -1551,19 +1646,22 @@ public final class VehicleCfg {
     }
 
     /**
-     * Thrust multiplier at pull-away.
+     * Thrust multiplier at pull-away, on top of what vanilla gives.
      *
-     * In the game, thrust depends on rpm linearly and at idle equals half the rated value:
-     * {@code engineForce = power * (0.5 + rpm / 24000)}. The model has neither a low gear
-     * nor a torque converter, so it is specifically heavy vehicles that lack low-end
-     * thrust; for light vehicles half the rated value is enough.
+     * In 42.21 the game drives through {@code CarController.control_ForwardNew}: thrust is
+     * {@code power * (0.3 + rpm / 30000) * (1 - v / 200)}, and in first gear it is already
+     * multiplied by {@link #VANILLA_FIRST_GEAR}. (An earlier version of this comment quoted
+     * {@code 0.5 + rpm / 24000} from {@code control_Forward}, which 42.21 no longer calls, and
+     * concluded that the game had no low gear; our 1.5 then landed on top of vanilla's 1.5.)
      *
-     * We return a multiplier that peaks at standstill and tapers linearly to one
-     * at the speed {@code lowGearTo}. That is how a torque converter behaves from stall
-     * to the coupling point.
+     * So {@code lowGear} is the TOTAL pull-away multiplier, and we add only what vanilla's first
+     * gear lacks: lowGear / 1.5. For 1.5 and less that is nothing; it matters for heavy vehicles
+     * (2..3). The extra peaks at standstill and tapers linearly to one at {@code lowGearTo},
+     * the way a torque converter behaves from stall to the coupling point.
      */
     public static float lowGearBoost(Rule rule, float speedKmh) {
-        if (rule.lowGear <= 1.0f) {
+        float extra = rule.lowGear / VANILLA_FIRST_GEAR;
+        if (extra <= 1.0f) {
             return 1.0f;
         }
         float v = Math.abs(speedKmh);
@@ -1571,12 +1669,7 @@ public final class VehicleCfg {
             return 1.0f;
         }
         float t = 1.0f - v / rule.lowGearTo;
-        return 1.0f + (rule.lowGear - 1.0f) * t;
-    }
-
-    /** The largest tank capacity among the rules. Zero if no capacities were set. */
-    public static int largestTank() {
-        return largestTank;
+        return 1.0f + (extra - 1.0f) * t;
     }
 
     public static String fmt(float v) {

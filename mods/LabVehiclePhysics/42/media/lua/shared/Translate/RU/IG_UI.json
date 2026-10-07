@@ -30,6 +30,7 @@
   "IGUI_LabVP_Src_server": "файл сервера",
   "IGUI_LabVP_Src_sandbox": "эта таблица",
   "IGUI_LabVP_Src_preset": "пресет «%1»",
+  "IGUI_LabVP_Src_cap": "урезано под стоковую подвеску",
   "IGUI_LabVP_kg": "кг",
   "IGUI_LabVP_hp": "л.с.",
   "IGUI_LabVP_kmh": "км/ч",

@@ -50,8 +50,13 @@ public class Patch_vehicleFloor {
     }
 
     public static final class Impl {
-        /** How far below normal the vehicle may sag before we intervene. */
+        /**
+         * How far below normal the vehicle may sag before we intervene, at least. A vehicle whose
+         * travel is longer (SuspensionHeadroom lengthens it) may sag by its travel plus
+         * {@link #SAG_MARGIN}: down to there the spring still holds it.
+         */
         public static final float SAG_LIMIT = 0.30f;
+        public static final float SAG_MARGIN = 0.05f;
         /** How far below normal it is put back, so that it does not get tossed up. */
         public static final float SAG_LIFT = 0.10f;
         /** Height of one floor level in physics units: 3 * 0.8164967. */
@@ -107,7 +112,8 @@ public class Patch_vehicleFloor {
             fWheelRadius = wheel.getField("radius");
 
             Log.debug("[LabVehiclePhysics] vehicle floor: measured from each vehicle's own ride height, "
-                    + "sag deeper than this counts as falling through: " + SAG_LIMIT);
+                    + "sag deeper than this counts as falling through: " + SAG_LIMIT
+                    + " or the vehicle's travel + " + SAG_MARGIN + ", whichever is deeper");
         }
 
         /** Height at which the chassis centre normally sits. Formula from CarController. */
@@ -169,7 +175,9 @@ public class Patch_vehicleFloor {
                     worstName = String.valueOf(mGetScriptName.invoke(vehicle));
                 }
 
-                if (sag < -SAG_LIMIT) {
+                float limit = Math.max(SAG_LIMIT,
+                        VehicleCfg.field(script.getClass(), "maxSuspensionTravelCm").getFloat(script) * 0.01f + SAG_MARGIN);
+                if (sag < -limit) {
                     fY.setFloat(origin, natural - SAG_LIFT);
                     mSetWorldTransform.invoke(vehicle, t);
                     clamps++;

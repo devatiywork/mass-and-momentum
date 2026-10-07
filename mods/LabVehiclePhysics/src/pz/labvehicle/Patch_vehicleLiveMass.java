@@ -100,13 +100,15 @@ public class Patch_vehicleLiveMass {
                 if (rule == null || !(rule.live || all) || rule.mass <= 0.0f) {
                     return vanilla;
                 }
+                // Capped like the script mass where the suspension limit stays (SuspensionCap).
+                float mass = SuspensionCap.cached(name, rule.mass, VehicleCfg.originalMass(name));
                 // Cargo is not part of the key: it changes every time the trunk is searched,
                 // and the log would fill up with repeats again.
-                if (LOGGED.add(name + "|" + rule.mass)) {
+                if (LOGGED.add(name + "|" + mass)) {
                     Log.debug("[LabVehiclePhysics] live mass: " + name + " = "
-                            + VehicleCfg.fmt(rule.mass) + " kg (game computed " + VehicleCfg.fmt(vanilla) + ")");
+                            + VehicleCfg.fmt(mass) + " kg (game computed " + VehicleCfg.fmt(vanilla) + ")");
                 }
-                return rule.mass;
+                return mass;
             } catch (Throwable t) {
                 broken = true;
                 Log.info("[LabVehiclePhysics] ERROR in live mass, disabling: " + t);

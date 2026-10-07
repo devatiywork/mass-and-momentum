@@ -15,6 +15,7 @@ load time; game files on disk are never modified.
 | LabVehiclePhysics | `zombie.network.CoopMaster` | `launchServer` | [Patch_coopServerName.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_coopServerName.java) |
 | LabVehiclePhysics | `zombie.core.physics.RagdollController` | `postUpdate` | [Patch_corpseFollowsRagdoll.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_corpseFollowsRagdoll.java) |
 | LabVehiclePhysics | `zombie.network.packets.character.DeadCharacterPacket` | `processClient` | [Patch_corpsePlacement.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_corpsePlacement.java) |
+| LabVehiclePhysics | `zombie.characters.IsoGameCharacter` | `onHitByVehicleApplyDamage` | [Patch_crushDamage.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_crushDamage.java) |
 | LabVehiclePhysics | `zombie.characters.IsoGameCharacter` | `die` | [Patch_deferCorpse.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_deferCorpse.java) |
 | LabVehiclePhysics | `zombie.core.physics.CarController` | `checkTire` | [Patch_enginePower.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_enginePower.java) |
 | LabVehiclePhysics | `zombie.characters.IsoGameCharacter` | `getMass` | [Patch_getMass.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_getMass.java) |
@@ -25,12 +26,15 @@ load time; game files on disk are never modified.
 | LabVehiclePhysics | `zombie.iso.IsoMovingObject` | `setX` | [Patch_nanWriteX.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_nanWriteX.java) |
 | LabVehiclePhysics | `zombie.iso.IsoMovingObject` | `setY` | [Patch_nanWriteY.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_nanWriteY.java) |
 | LabVehiclePhysics | `zombie.characters.IsoGameCharacter` | `onHitByVehicle` | [Patch_onHitByVehicle.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_onHitByVehicle.java) |
+| LabVehiclePhysics | `zombie.vehicles.BaseVehicle` | `setModelVisible` | [Patch_placeholderModels.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_placeholderModels.java) |
 | LabVehiclePhysics | `zombie.vehicles.BaseVehicle` | `applyImpulseFromHitPlant` | [Patch_plantImpulse.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_plantImpulse.java) |
 | LabVehiclePhysics | `zombie.vehicles.BaseVehicle` | `testCollisionWithProneCharacter` | [Patch_proneImpulse.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_proneImpulse.java) |
+| LabVehiclePhysics | `zombie.characters.IsoZombie` | `postHitByVehicleUpdateStance` | [Patch_pushKnockdown.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_pushKnockdown.java) |
 | LabVehiclePhysics | `zombie.characters.NetworkZombieAI` | `parse` | [Patch_remoteRagdollUpdate.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_remoteRagdollUpdate.java) |
 | LabVehiclePhysics | `zombie.vehicles.BaseVehicle` | `isCollided` | [Patch_remoteVehicleContact.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_remoteVehicleContact.java) |
 | LabVehiclePhysics | `zombie.vehicles.VehiclePart` | `getContainerCapacity` | [Patch_tankCapacity.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_tankCapacity.java) |
 | LabVehiclePhysics | `zombie.inventory.InventoryItem` | `getMaxCapacity` | [Patch_tankItemCapacity.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_tankItemCapacity.java) |
+| LabVehiclePhysics | `zombie.vehicles.VehiclePart` | `setContainerContentAmount` | [Patch_tankWrite.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_tankWrite.java) |
 | LabVehiclePhysics | `zombie.vehicles.BaseVehicle` | `damageObjects` | [Patch_treeCrash.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_treeCrash.java) |
 | LabVehiclePhysics | `zombie.vehicles.BaseVehicle` | `crash` | [Patch_treeCrashDamage.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_treeCrashDamage.java) |
 | LabVehiclePhysics | `zombie.vehicles.BaseVehicle` | `breakingObjects` | [Patch_vegetationCap.java](../mods/LabVehiclePhysics/src/pz/labvehicle/Patch_vegetationCap.java) |

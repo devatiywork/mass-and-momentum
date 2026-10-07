@@ -17,7 +17,9 @@ One Workshop item, two mods:
 ## What it changes
 
 - **Real masses** for the vanilla fleet and popular military and KI5 vehicle mods; any other vehicle
-  gets a preset by type. The engine's hidden 2,400 kg suspension limit is lifted in memory.
+  keeps its own weight and can get a type preset on the sandbox page. The engine's hidden 2,400 kg
+  suspension limit is lifted in memory on Windows; on Linux, the Steam Deck and macOS a vehicle gets
+  the heaviest mass the stock suspension carries instead.
 - **Hitting zombies** comes from speed and the reduced mass of vehicle and body, not from FPS. Speed
   above 54 km/h finally counts, each body takes momentum from the vehicle once, by its own weight,
   and zombies have different body weights.
@@ -60,8 +62,7 @@ docs are in English.
 
 - Build 42.21.
 - [ZombieBuddy](https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853) with its
-  one-time installer. Until ZombieBuddy is updated for 42.21, use its
-  [temporary 42.21 fix](https://steamcommunity.com/sharedfiles/filedetails/?id=3807686870).
+  one-time installer.
 - Dedicated servers need ZombieBuddy on the server too. For co-op hosting the mod adds ZombieBuddy
   to the co-op server itself; just enable the mods in the main menu Mods list as well.
 
@@ -79,9 +80,21 @@ ZB_JAR="/c/Program Files (x86)/Steam/steamapps/workshop/content/108600/361986285
 The jars land in `mods/<id>/42/media/java/`, and `dist/MassAndMomentum` is a complete Workshop item.
 To play your own build instead of the Workshop one, copy the folders from
 `dist/MassAndMomentum/Contents/mods` into `Zomboid/mods` (ZombieBuddy will ask once to approve the
-new jars). The Workshop jars were built with Microsoft OpenJDK 17.0.19 for the main code and
-Temurin 25.0.4 for `NativePatch`; set `JDK17` to compile the main code with a JDK 17 the same way.
-Jar files never match byte for byte because of timestamps, so compare the classes inside them.
+new jars).
+
+### Verifying the Workshop jars
+
+Java mods run with full access to your computer, so you should not have to take our word for what
+is inside. Since 1.0.3 the jars are reproducible: `build.sh` packs a sorted list of classes with a
+fixed date, a fixed manifest and no compression, so the same sources and the same compilers give
+byte-identical jars. To check that the Workshop item holds exactly the code in this repository:
+
+1. Check out the tag of the version you have, for example `v1.0.3`.
+2. Build with the compilers of the Workshop build: OpenJDK 17.0.19 as `JDK17` (main code and
+   packing) and Temurin 25.0.4 as `JDK` (`NativePatch`).
+3. Compare the SHA-256 that `build.sh` prints with [CHECKSUMS.md](CHECKSUMS.md) and with the jars
+   in your Workshop folder:
+   `steamapps/workshop/content/108600/3810710740/mods/<id>/42/media/java/<id>.jar`.
 
 ## Docs
 

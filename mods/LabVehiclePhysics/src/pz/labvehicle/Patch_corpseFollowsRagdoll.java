@@ -72,7 +72,7 @@ public class Patch_corpseFollowsRagdoll {
         public static final float MAX_JUMP = 4.0f;
 
         public static volatile boolean broken = false;
-        public static Method rGetChar, rX, rY;
+        public static Method rGetChar, rX, rY, rComputed;
         public static Method cIsDead, cGetX, cGetY, cGetZ, cSetPosition, cSetSquare;
         /** To check that the destination has a world square at all. */
         public static Method cGetCell, cellGetSquare;
@@ -98,6 +98,8 @@ public class Patch_corpseFollowsRagdoll {
         public static long rejNaN = 0L;
         public static long rejFar = 0L;
         public static long rejNoSquare = 0L;
+        /** The ragdoll is not measured yet: its desired position is still the previous body's. */
+        public static long rejEarly = 0L;
         public static boolean noSquareLogged = false;
 
         public static void sync(Object ragdoll) {
@@ -128,6 +130,13 @@ public class Patch_corpseFollowsRagdoll {
                 // rejected, we never reach the end of the method and would stay silent exactly
                 // when it matters most to see it.
                 report();
+                // In its first frames the controller has not computed the body yet
+                // (calculateSimulationData skips the first frame) and the desired position is
+                // whatever the pooled field held: the jumps of up to 4 tiles seen in the log.
+                if (!((Boolean) rComputed.invoke(ragdoll)).booleanValue()) {
+                    rejEarly++;
+                    return;
+                }
                 float nx = ((Float) rX.invoke(ragdoll)).floatValue();
                 float ny = ((Float) rY.invoke(ragdoll)).floatValue();
                 if (Float.isNaN(nx) || Float.isNaN(ny)) {
@@ -266,6 +275,7 @@ public class Patch_corpseFollowsRagdoll {
             }
             rX = rc.getMethod("getDesiredCharacterPositionX");
             rY = rc.getMethod("getDesiredCharacterPositionY");
+            rComputed = rc.getMethod("isSimulationDirectionCalculated");
             rGetChar = rc.getMethod("getGameCharacterObject");
         }
 
@@ -308,17 +318,17 @@ public class Patch_corpseFollowsRagdoll {
                 return;
             }
             lastReportNanos = now;
-            long rejected = rejNaN + rejFar + rejNoSquare;
+            long rejected = rejNaN + rejFar + rejNoSquare + rejEarly;
             if (moves == 0L && rejected == 0L) {
                 return;
             }
             Log.debug(String.format(
                     "[LabVehiclePhysics] ragdoll follow, last 15 s: bodies %d, CORPSES %d (caught in total %d), "
-                    + "mean step %.2f tiles, max %.2f; rejected %d (no square %d, "
+                    + "mean step %.2f tiles, max %.2f; rejected %d (not measured yet %d, no square %d, "
                     + "farther than %.1f tiles %d, NaN %d)",
                     moves, corpseMoves, Patch_catchCorpse.Impl.caught,
                     moves > 0L ? sumDist / moves : 0.0, maxDist,
-                    rejected, rejNoSquare, MAX_JUMP, rejFar, rejNaN));
+                    rejected, rejEarly, rejNoSquare, MAX_JUMP, rejFar, rejNaN));
             moves = 0L;
             corpseMoves = 0L;
             sumDist = 0.0;
@@ -326,6 +336,7 @@ public class Patch_corpseFollowsRagdoll {
             rejNaN = 0L;
             rejFar = 0L;
             rejNoSquare = 0L;
+            rejEarly = 0L;
         }
     }
 }

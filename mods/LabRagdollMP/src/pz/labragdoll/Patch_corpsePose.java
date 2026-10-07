@@ -32,6 +32,12 @@ import me.zed_0xff.zombie_buddy.Patch;
  *
  * As in the other cases, we do not force true but re-evaluate the vanilla conditions,
  * skipping only the first branch.
+ *
+ * One more condition of our own: if the body has a ragdoll controller, its pose is taken only
+ * once the game has measured that ragdoll (isSimulationDirectionCalculated) and does not see the
+ * body upright. A ragdoll stopped in its first frames still holds the pose of the moment of
+ * impact, and copying it left a zombie killed on first contact standing as a corpse. Such a
+ * body gets the vanilla multiplayer pose instead.
  */
 @Patch(className = "zombie.characters.IsoGameCharacter", methodName = "canUseCurrentPoseForCorpse", warmUp = true)
 public class Patch_corpsePose {
@@ -46,8 +52,9 @@ public class Patch_corpsePose {
     public static final class Impl {
         public static volatile boolean broken = false;
         public static Method mSceneCulled, mHasModel, mGetAnimPlayer, mRagdollActive, mNeedsFirstFrame;
-        public static long allowed = 0L;
-        public static boolean logged = false;
+        public static Method mRagdollController, mComputed, mUpright;
+        public static long allowed = 0L, upright = 0L;
+        public static boolean logged = false, loggedUpright = false;
 
         public static boolean recheck(Object chr) {
             if (broken || chr == null) {
@@ -80,6 +87,15 @@ public class Patch_corpsePose {
                     }
                     ok = !((Boolean) mNeedsFirstFrame.invoke(ap)).booleanValue();
                 }
+                if (ok && standingRagdoll(chr)) {
+                    ok = false;
+                    upright++;
+                    if (!loggedUpright) {
+                        loggedUpright = true;
+                        Log.info("[LabRagdollMP] corpse pose: a ragdoll not yet measured or still upright "
+                                + "keeps the vanilla pose (no standing corpses)");
+                    }
+                }
                 if (ok) {
                     allowed++;
                     if (!logged) {
@@ -95,6 +111,20 @@ public class Patch_corpsePose {
             }
         }
 
+        /** The body has a ragdoll the game has not measured yet, or still sees upright. */
+        public static boolean standingRagdoll(Object chr) throws Exception {
+            Object rc = mRagdollController.invoke(chr);
+            if (rc == null) {
+                return false;
+            }
+            if (mComputed == null) {
+                mComputed = rc.getClass().getMethod("isSimulationDirectionCalculated");
+                mUpright = rc.getClass().getMethod("isUpright");
+            }
+            return !((Boolean) mComputed.invoke(rc)).booleanValue()
+                    || ((Boolean) mUpright.invoke(rc)).booleanValue();
+        }
+
         private static synchronized void init(Class<?> cc) throws Exception {
             if (mSceneCulled != null) {
                 return;
@@ -103,6 +133,7 @@ public class Patch_corpsePose {
             mHasModel = cc.getMethod("hasActiveModel");
             mGetAnimPlayer = cc.getMethod("getAnimationPlayer");
             mRagdollActive = cc.getMethod("isRagdollSimulationActive");
+            mRagdollController = cc.getMethod("getRagdollController");
         }
     }
 }

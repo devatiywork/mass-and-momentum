@@ -8,18 +8,21 @@ description=[b]Source code (MIT):[/b] [url=https://github.com/devatiywork/mass-a
 description=
 description=[h2]Requirements[/h2]
 description=[list]
-description=[*]Build 42.21 and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853]ZombieBuddy[/url] with its one-time installer: the mod is Java code. Until ZombieBuddy is updated, use its [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3807686870]temporary 42.21 fix[/url].
+description=[*]Build 42.21 and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853]ZombieBuddy[/url] with its one-time installer: the mod is Java code.
 description=[*]Dedicated server: ZombieBuddy on the server too.
 description=[*]Co-op (Host): the mod adds ZombieBuddy to the co-op server itself. Enable the mods in the main menu Mods list too and approve the Java mods with "remember".
 description=[*][b]Ragdolls[/b]: every player turns on Options / Display & Performance / [b]Use Physics Hit Reactions[/b]. In multiplayer it shows unchecked and Apply there really turns it off, so check it once. Server: [b]UsePhysicsHitReaction=true[/b] recommended.
 description=[/list]
 description=The mod only works on servers that list it. Elsewhere your game stays vanilla, no advantage where it was not invited.
 description=
-description=[h2]New in 1.0.2[/h2]
+description=[h2]New in 1.0.3[/h2]
 description=[list]
-description=[*][b]No more stalling in a crowd.[/b] A zombie pushes back once, and only for the speed it lacks. Bodies under the vehicle are crushed by its weight, tracked vehicles crush along their whole tracks, and dead ragdolls under a vehicle turn into corpses.
-description=[*]Heavy vehicles knock zombies over even at low speed instead of sliding them along the bumper.
-description=[*][b]Viewpoint[/b]: Military Tool Kit tanks are drawn in 3D, and turrets (tanks, the Humvee's M2) aim at the cursor with a gunner's sight.
+description=[*][b]Linux, Steam Deck, macOS[/b]: the suspension limit is lifted only on Windows so far. Elsewhere a vehicle now gets the heaviest mass the stock suspension carries instead of sinking.
+description=[*]Heavy vans and SUVs no longer sit with their wheels in the ground: a vehicle whose suspension travel is too short for its weight gets a longer one.
+description=[*][b]Acceleration[/b]: engines were 1.4 times too strong. Vanilla vehicles keep their own top speed, modded ones reach their real one.
+description=[*]Zombies hit by a vehicle no longer stay standing, as a standing corpse or after ploughing through a big crowd online.
+description=[*][b]Fuel[/b]: vehicles without tank data no longer get a 570-litre tank.
+description=[*]The Workshop jars rebuild byte for byte from the GitHub source, SHA-256 in CHECKSUMS.md.
 description=[/list]
 description=
 description=[h2]What changes[/h2]
@@ -59,9 +62,9 @@ description=[h1]Mass & Momentum: физика транспорта[/h1]
 description=Машины получают настоящий вес, от 950 кг у малолитражки до 52 т у танка. Танк проходит сквозь орду, хэтчбек в ней вязнет. От FPS ничего не зависит.
 description=[b]Совместим с [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528]Project Viewpoint[/url][/b], проверено на 42.21.
 description=[b]Исходный код (MIT):[/b] [url=https://github.com/devatiywork/mass-and-momentum]GitHub[/url]
-description=Нужны Build 42.21 и [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853]ZombieBuddy[/url] с установщиком, под 42.21 пока — [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3807686870]временный фикс[/url]. Выделенному серверу ZombieBuddy нужен тоже, на кооп-сервер мод добавит его сам: включите моды и в главном меню, Java-моды одобрите с «запомнить».
+description=Нужны Build 42.21 и [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853]ZombieBuddy[/url] с установщиком. Выделенному серверу ZombieBuddy нужен тоже, на кооп-сервер мод добавит его сам: включите моды и в главном меню, Java-моды одобрите с «запомнить».
 description=[b]Рэгдоллы[/b]: каждому игроку включить Настройки / «Экран и производительность» / [b]«Использовать рэгдолл-физику»[/b]. В сети галка показана снятой, и «Применить» её выключает — проверьте один раз. Серверу — [b]UsePhysicsHitReaction=true[/b].
-description=[b]Новое в 1.0.2[/b]: машина не встаёт в толпе — зомби толкает её один раз, тела под днищем давятся весом, гусеницы давят всей длиной, мёртвые рэгдоллы под машиной становятся трупами. Тяжёлая машина сбивает зомби с ног и на малой скорости. Танки MTK видны в 3D Viewpoint, башни наводятся на курсор.
+description=[b]Новое в 1.0.3[/b]: на Linux, Steam Deck и macOS машина получает наибольшую массу, которую держит штатная подвеска, и не проседает. Тяжёлые фургоны и внедорожники не стоят колёсами в земле. Двигатели были в 1,4 раза сильнее нужного; ванильные машины держат свою максималку, модовые выходят на настоящую. Сбитые зомби не остаются стоять. Машины без данных о баке не получают бак на 570 л. Jar собираются из исходников на GitHub байт в байт.
 description=[list]
 description=[*][b]Массы[/b] ванильных машин, военных модов и KI5; остальные сохраняют свой вес, любой можно назначить пресет по типу на странице песочницы.
 description=[*][b]Наезд[/b] — от скорости и приведённой массы, FPS не влияет. [b]Кусты[/b] забирают энергию, тяжёлая машина валит [b]деревья[/b].

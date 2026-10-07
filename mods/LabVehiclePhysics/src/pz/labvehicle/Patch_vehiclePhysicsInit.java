@@ -35,6 +35,9 @@ public class Patch_vehiclePhysicsInit {
     @Patch.OnEnter
     public static void enter() {
         NativeBridge.ensure();
+        // Where the limit stays, the masses get capped (SuspensionCap); on Windows that is known
+        // only now, after the masses were already written, so they are applied once more.
+        SuspensionCap.afterNativeAttempt();
         VehicleCfg.ensureApplied();
     }
 }

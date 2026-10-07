@@ -234,8 +234,8 @@ function LabVPTable.chainText(source)
         local tag = string.match(token, "^(%a+)")
         if tag == "preset" then
             table.insert(parts, getText("IGUI_LabVP_Src_preset", LabVPTable.presetName(string.match(token, "%[(.-)%]"))))
-        elseif tag == "author" then
-            table.insert(parts, getText("IGUI_LabVP_Src_author"))
+        elseif tag == "author" or tag == "cap" then
+            table.insert(parts, getText("IGUI_LabVP_Src_" .. tag))
         elseif tag == "builtin" or tag == "cfg" or tag == "server" or tag == "sandbox" then
             table.insert(parts, getText("IGUI_LabVP_Src_" .. tag))
         else

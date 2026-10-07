@@ -140,8 +140,8 @@ public final class VehicleTable {
         }
         VehicleCfg.Rule result = rowRule != null ? VehicleCfg.resolveLayers(name, false, rowRule) : base;
         Object out = newTable();
-        set(out, "base", values(base));
-        set(out, "result", values(result));
+        set(out, "base", values(base, name));
+        set(out, "result", values(result, name));
         set(out, "game", game(name));
         return out;
     }
@@ -166,6 +166,22 @@ public final class VehicleTable {
             set(t, "category", r.category);
         }
         set(t, "source", r.source != null ? r.source : "");
+        return t;
+    }
+
+    /**
+     * {@link #values(VehicleCfg.Rule)} for one vehicle: where the suspension force limit stays, the
+     * mass it really gets, with "cap[suspension]" at the head of the source chain (SuspensionCap).
+     */
+    public static Object values(VehicleCfg.Rule r, String name) throws Exception {
+        Object t = values(r);
+        if (r != null && r.mass > 0.0f) {
+            float mass = SuspensionCap.cached(name, r.mass, VehicleCfg.originalMass(name));
+            if (mass < r.mass) {
+                num(t, "mass", mass);
+                set(t, "source", "cap[suspension]" + (r.source != null && !r.source.isEmpty() ? " over " + r.source : ""));
+            }
+        }
         return t;
     }
 

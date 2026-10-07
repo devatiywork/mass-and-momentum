@@ -104,6 +104,8 @@ public final class CorpseSync {
     public static Method mGetOnlineID;
     public static Method mGetX;
     public static Method mGetY;
+    public static Method mGetZ;
+    public static Method mSetZ;
     public static Method mAnimAngle;
     public static Method mSetX;
     public static Method mSetNextX;
@@ -133,6 +135,8 @@ public final class CorpseSync {
     public static long held = 0L;
     public static long landed = 0L;
     public static long landedAlive = 0L;
+    /** Landing points with no square on the server: the zombie was left where the server saw it. */
+    public static long noSquare = 0L;
     public static long timeouts = 0L;
     public static long rejected = 0L;
     public static long onGround = 0L;
@@ -169,6 +173,8 @@ public final class CorpseSync {
         mGetOnlineID = zombieClass.getMethod("getOnlineID");
         mGetX = mov.getMethod("getX");
         mGetY = mov.getMethod("getY");
+        mGetZ = mov.getMethod("getZ");
+        mSetZ = mov.getMethod("setZ", float.class);
         mAnimAngle = chr.getMethod("getAnimAngleRadians");
         mSetX = mov.getMethod("setX", float.class);
         mSetNextX = mov.getMethod("setNextX", float.class);
@@ -283,6 +289,9 @@ public final class CorpseSync {
                 return true;
             }
             drop(zombie);
+            // die() goes through right after this, at the point the owner's updates left the
+            // zombie at; after a ragdoll that can be under the floor, with no square (see place()).
+            ensureFloor(zombie);
             report();
             return false;
         } catch (Throwable t) {
@@ -359,17 +368,54 @@ public final class CorpseSync {
         }
     }
 
-    /** Move the zombie on the server the way an incoming owner update does ({@code applyZombie}). */
+    /**
+     * Move the zombie on the server the way an incoming owner update does ({@code applyZombie}).
+     *
+     * The zombie must end up on a square: die() sends the death through DeadCharacterPacket,
+     * which reads {@code square.getStaticMovingObjects()}. Without a square that throws ("Packet
+     * ZombieDeath send failed"), the corpse exists only on the server, and every client keeps the
+     * zombie standing where its body froze. Seen when ramming a crowd of 200: after the ragdoll
+     * the server had the zombie slightly under the floor (z -0.1), and the game looks for a square
+     * only from floor(z) down to 0, so there was none. So: z below zero counts as the floor, and if
+     * the landing point still has no square on the server, the zombie stays where the server saw it.
+     */
     public static void place(Object zombie, float x, float y, float angleDeg) throws Exception {
-        mSetLastX.invoke(zombie, mSetNextX.invoke(zombie, mSetX.invoke(zombie, Float.valueOf(x))));
-        mSetLastY.invoke(zombie, mSetNextY.invoke(zombie, mSetY.invoke(zombie, Float.valueOf(y))));
+        float oldX = ((Float) mGetX.invoke(zombie)).floatValue();
+        float oldY = ((Float) mGetY.invoke(zombie)).floatValue();
+        if (((Float) mGetZ.invoke(zombie)).floatValue() < 0.0f) {
+            mSetZ.invoke(zombie, Float.valueOf(0.0f));
+        }
+        moveTo(zombie, x, y);
         if (!Float.isNaN(angleDeg)) {
             mSetDirectionAngle.invoke(zombie, Float.valueOf(angleDeg));
         }
         mSquareFromPosition.invoke(zombie);
+        if (mGetCurrentSquare.invoke(zombie) == null) {
+            noSquare++;
+            TreeBreak.warnOnce("corpse-nosquare", String.format(java.util.Locale.ROOT,
+                    "corpse sync: the landing point %.1f, %.1f has no square on the server - the corpse stays at %.1f, %.1f "
+                    + "(otherwise its death packet fails and clients keep the zombie standing)", x, y, oldX, oldY));
+            moveTo(zombie, oldX, oldY);
+            mSquareFromPosition.invoke(zombie);
+        }
         if (mGetCurrentSquare.invoke(zombie) != mGetMovingSquare.invoke(zombie)) {
             mSetMovingSquareNow.invoke(zombie);
         }
+    }
+
+    /** Server: z below the floor counts as the floor, and the zombie gets its square back. */
+    public static void ensureFloor(Object zombie) throws Exception {
+        if (((Float) mGetZ.invoke(zombie)).floatValue() < 0.0f) {
+            mSetZ.invoke(zombie, Float.valueOf(0.0f));
+            mSquareFromPosition.invoke(zombie);
+        } else if (mGetCurrentSquare.invoke(zombie) == null) {
+            mSquareFromPosition.invoke(zombie);
+        }
+    }
+
+    public static void moveTo(Object zombie, float x, float y) throws Exception {
+        mSetLastX.invoke(zombie, mSetNextX.invoke(zombie, mSetX.invoke(zombie, Float.valueOf(x))));
+        mSetLastY.invoke(zombie, mSetNextY.invoke(zombie, mSetY.invoke(zombie, Float.valueOf(y))));
     }
 
     // ================================================================ driver's client
@@ -467,11 +513,12 @@ public final class CorpseSync {
         Log.debug(String.format(java.util.Locale.ROOT,
                 "[LabVehiclePhysics] corpse sync, last 15 s: held %d, landing points %d (dead %d, alive %d, "
                         + "the server lagged behind the body by %.1f tiles on average), finished by the owner's on-ground update %d, "
-                        + "driver left %d, safety timeout %d",
-                held, done, landed, landedAlive, done > 0 ? offsetSum / done : 0.0, onGround, ownerLost, timeouts));
+                        + "driver left %d, safety timeout %d, landing point without a square %d",
+                held, done, landed, landedAlive, done > 0 ? offsetSum / done : 0.0, onGround, ownerLost, timeouts, noSquare));
         held = 0L;
         landed = 0L;
         landedAlive = 0L;
+        noSquare = 0L;
         timeouts = 0L;
         onGround = 0L;
         ownerLost = 0L;

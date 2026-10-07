@@ -81,28 +81,36 @@ Travel is the distance over which the wheel's ray searches for the ground. Setti
 Rated engine power. The mod converts it into engine force by itself:
 
 ```
-required force = 48.2 × hp      multiplier = required force / script's engineForce
+required force = 34.75 × hp × (script mass + 310) / mass
+multiplier     = required force / script's engineForce
 ```
 
-Mass cancels out of the formula, so you no longer need to work out the power-to-weight ratio
-by hand: the spec sheet is enough. Added on 26.09.2026 together with the Lua API: mod authors
-supply power in hp, and the same conversion is available in the config.
+`mass` is the rated mass from the rule. `script mass + 310` is what the physics really moves: the
+game adds the weight of the installed parts on top of the script mass (`BaseVehicle.updateTotalMass`,
+250..330 kg on vanilla vehicles). The constant 34.75 is anchored on the vanilla passenger car as the
+physics sees it: force 4000 for 800 + 310 = 1110 kg against a real 140 hp / 1350 kg sedan. Where the
+suspension cap lowers the script mass, the force drops in the same proportion.
+
+You do not need to work out the power-to-weight ratio by hand: the spec sheet is enough. Added on
+26.09.2026 together with the Lua API: mod authors supply power in hp, and the same conversion is
+available in the config. Until 04.10.2026 the constant was 48.2 × hp, anchored on the script mass
+of 800 kg: every vehicle pulled 1.39 times too hard.
 
 If both `power` and `powerMul` are set, `powerMul` wins: it is the manual setting.
 
 ### `powerMul=auto|<number>`
 
-Engine force multiplier. `auto` is the ratio of the new mass to the vanilla one, so acceleration stays stock despite the real weight.
+Engine force multiplier. `auto` is the ratio of the new mass to the vanilla one (both with the ~310 kg of parts the physics adds), so acceleration stays stock despite the real weight.
 
 To work out a realistic number, use the power-to-weight ratio relative to the vanilla passenger car:
 
 ```
-PZ vanilla car:           force 4000 / mass 800 = 5.00
+PZ vanilla car:           force 4000 / physics mass 1110 (800 + 310 of parts) = 3.60
 1993 sedan:               140 hp / 1350 kg
 Bushmaster:               300 hp / 11400 kg
 ratio:                    0.254   → acceleration 3.9 times worse than the sedan
-required force:           5.00 × 0.254 × 11400 = 14,464
-mod's script has 4850     → powerMul = 2.98
+required force:           3.60 × 0.254 × (11400 + 310) = 10,709
+mod's script has 4850     → powerMul = 2.21
 ```
 
 ### `brakeMul=auto|<number>`
@@ -113,23 +121,27 @@ For the Bushmaster, the vehicle mod's own stock balance turned out to be truck-l
 
 ### `lowGear=<multiplier>`, `lowGearTo=<km/h>`
 
-Engine force multiplier for pulling away. By default it fades out by 30 km/h.
+The TOTAL engine force multiplier for pulling away. By default the extra fades out by 30 km/h.
 
-**Why it is needed.** In the game, engine force is linear in RPM, and at idle it equals half the rated value:
+**What vanilla already does.** In 42.21 the game drives through `CarController.control_ForwardNew`:
 
 ```java
-engineForce = enginePower * (0.5 + rpm / 24000.0);
+engineForce = enginePower * gearMul * (0.3 + rpm / 30000.0) * (1 - speed / 200);   // gearMul = 1.5 in first gear
 ```
 
-The model has neither a low gear nor a torque converter. Half the rated value is enough for light vehicles but not for heavy ones, and they cannot pull away inside a crowd.
+First gear already multiplies the force by 1.5. So `lowGear` is the total pull-away multiplier, and the mod adds only `lowGear / 1.5`: values up to 1.5 add nothing. Until 04.10.2026 this section quoted `0.5 + rpm / 24000` from `control_Forward`, which 42.21 no longer calls, concluded that the game had no low gear, and the vans' `lowGear=1.5` landed on top of vanilla's 1.5.
 
-This is **not a cheat but a missing piece of the model put back**: a real diesel delivers its peak torque at low revs, and a torque converter multiplies it two- to threefold when pulling away.
+**Why heavy vehicles need it.** Light vehicles pull away fine on vanilla's first gear; an eleven-tonne armoured car cannot pull away inside a crowd. This is **not a cheat but a missing piece of the model put back**: a real diesel delivers its peak torque at low revs, and a torque converter multiplies it two- to threefold when pulling away. Typical values: 2..3, only for vehicles over about 5 t.
 
-The multiplier is at its maximum at standstill and falls linearly to one: this is how a torque converter behaves from stall to the coupling point.
+The extra is at its maximum at standstill and falls linearly to one: this is how a torque converter behaves from stall to the coupling point.
 
 ### `maxSpeed=<km/h>`
 
-Soft speed cap. Keep in mind the **hard global cap of 34 units (~122 km/h)** in `updateVelocityMultiplier`: it has nothing to do with mass, and setting a higher value is pointless.
+The real top speed. The game's own `maxSpeed` is not a top speed: above it the engine force fades out linearly and reaches zero 20 km/h higher (`CarController`: `F × (maxSpeed + 20 − v) / 20`), and with no air drag in the model every vehicle ends up at `maxSpeed + 20`. So the mod writes `maxSpeed − 20` into the script, and the vehicle ends up at the number from the rule. Until 04.10.2026 the value went in as is, and every vehicle ran 20 km/h faster than its passport (Bushmaster 120 instead of 100).
+
+From the built-in data it applies to modded vehicles only: vanilla vehicles keep the game's own top speed (decision of 04.10.2026). The author data, the player's file and the sandbox table still set it on any vehicle.
+
+Keep in mind the **hard global cap of 34 units (~122 km/h)** in `updateVelocityMultiplier`: it has nothing to do with mass, and setting a higher value is pointless. In multiplayer the server option `SpeedLimit` cuts the engine at its value (default 70), and the dashboard then shows an inflated speed.
 
 ### `tank=<litres>`
 

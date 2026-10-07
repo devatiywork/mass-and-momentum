@@ -170,9 +170,11 @@ public class Patch_enginePower {
                         sb.append(", sandbox multiplier x").append(VehicleCfg.fmt(global));
                     }
                     sb.append(", braking x").append(VehicleCfg.fmt(brake));
-                    if (rule != null && rule.lowGear > 1.0f) {
-                        sb.append(", low-gear boost x").append(VehicleCfg.fmt(rule.lowGear))
-                          .append(" fading out at ").append(VehicleCfg.fmt(rule.lowGearTo)).append(" km/h");
+                    if (rule != null && rule.lowGear > VehicleCfg.VANILLA_FIRST_GEAR) {
+                        sb.append(", low gear x").append(VehicleCfg.fmt(rule.lowGear)).append(" in total (x")
+                          .append(VehicleCfg.fmt(rule.lowGear / VehicleCfg.VANILLA_FIRST_GEAR))
+                          .append(" over vanilla first gear) fading out at ")
+                          .append(VehicleCfg.fmt(rule.lowGearTo)).append(" km/h");
                     }
                     Log.debug(sb.toString());
                 }

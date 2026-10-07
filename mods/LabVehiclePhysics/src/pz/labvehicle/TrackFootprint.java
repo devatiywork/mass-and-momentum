@@ -50,11 +50,17 @@ public final class TrackFootprint {
     public static final float RELEASE_MARGIN = 0.5f;
     /** A body lies low (not on the hood) if its pelvis is below the vehicle's level + this. */
     public static final float RELEASE_LOW = 0.25f;
+    /** A body is ended only after lying under the vehicle this long without a break. */
+    public static final long RELEASE_AFTER_NANOS = 400_000_000L;
+    /** Not seen under the vehicle for longer than this: the streak starts over. */
+    public static final long RELEASE_GAP_NANOS = 250_000_000L;
+    /** Dead body -> {first seen under the vehicle, last seen}, main thread only. */
+    public static final java.util.Map<Object, long[]> UNDER = new java.util.WeakHashMap<Object, long[]>();
 
     public static volatile boolean broken = false;
     public static volatile boolean censusBroken = false;
     public static volatile boolean releaseBroken = false;
-    public static Method mDriver, mRagdollController, mStateData, mSetActive, mPelvisZ;
+    public static Method mDriver, mRagdollController, mStateData, mSetActive, mPelvisZ, mComputed, mUpright;
     public static Field fSimulating;
     public static long released = 0L, lastReleaseReport = 0L;
     public static Method mScriptName, mGetScript, mWheelCount, mGetWheel, mWheelOffset, mLocalPos, mSpeed;
@@ -203,6 +209,22 @@ public final class TrackFootprint {
      * pose it lay in, without physics; the vehicle rolls over it like over any corpse. Bodies in
      * the air or on the hood are left alone, and so are living ones (under a heavy vehicle they
      * are crushed first, see Patch_crushDamage).
+     *
+     * Only a ragdoll the game has already measured. In its first frames the controller has not
+     * computed the body yet (RagdollController.calculateSimulationData skips the first frame), and
+     * getPelvisPositionZ() still returns the pooled field from the previous body, often 0. Ending
+     * the ragdoll then froze a zombie killed on first contact in its standing pose, and the corpse
+     * copied that pose (canUseCurrentPoseForCorpse is unlocked by LabRagdollMP): a dead zombie
+     * standing in the street. So: skipped until isSimulationDirectionCalculated(), and while the
+     * game itself still sees the body upright.
+     *
+     * And only a body that STAYS there. "Pelvis below the vehicle's level + 0.25" is about 0.6 m:
+     * a zombie thrown at bumper height passes it, and so does one flying low past the wheels. With
+     * the first frame skipped, those were ended a frame or two later in mid-air and froze in their
+     * flying pose. A body pinned under the hull stays there for seconds; one thrown by the impact
+     * leaves the footprint within a fraction of a second. So a body is ended only after
+     * RELEASE_AFTER_NANOS under the vehicle without a break; the ones thrown clear land and become
+     * corpses the vanilla way.
      */
     public static void releaseDeadRagdolls(Object vehicle) {
         if (broken || releaseBroken || vehicle == null) {
@@ -228,6 +250,7 @@ public final class TrackFootprint {
                 return;
             }
             float level = ((Float) mBodyZ.invoke(vehicle)).floatValue();
+            long now = System.nanoTime();
             int vx = (int) Math.floor(((Float) mBodyX.invoke(vehicle)).floatValue());
             int vy = (int) Math.floor(((Float) mBodyY.invoke(vehicle)).floatValue());
             int vz = (int) Math.floor(level);
@@ -248,12 +271,24 @@ public final class TrackFootprint {
                             continue;
                         }
                         Object rc = mRagdollController.invoke(o);
-                        if (rc == null || ((Float) mPelvisZ.invoke(rc)).floatValue() >= level + RELEASE_LOW) {
+                        if (rc == null || !((Boolean) mComputed.invoke(rc)).booleanValue()
+                                || ((Boolean) mUpright.invoke(rc)).booleanValue()
+                                || ((Float) mPelvisZ.invoke(rc)).floatValue() >= level + RELEASE_LOW) {
                             continue;
                         }
                         if (!underHull(vehicle, s, o, RELEASE_MARGIN)) {
                             continue;
                         }
+                        long[] streak = UNDER.get(o);
+                        if (streak == null || now - streak[1] > RELEASE_GAP_NANOS) {
+                            UNDER.put(o, new long[] {now, now});
+                            continue;
+                        }
+                        streak[1] = now;
+                        if (now - streak[0] < RELEASE_AFTER_NANOS) {
+                            continue;
+                        }
+                        UNDER.remove(o);
                         fSimulating.setBoolean(mStateData.invoke(rc), false);
                         mSetActive.invoke(rc, Boolean.FALSE);
                         released++;
@@ -295,6 +330,8 @@ public final class TrackFootprint {
         mStateData = rcClass.getMethod("getRagdollStateData");
         mSetActive = rcClass.getMethod("setActive", boolean.class);
         mPelvisZ = rcClass.getMethod("getPelvisPositionZ");
+        mComputed = rcClass.getMethod("isSimulationDirectionCalculated");
+        mUpright = rcClass.getMethod("isUpright");
         fSimulating = sdClass.getField("isSimulating");
         mDriver = Class.forName("zombie.vehicles.BaseVehicle", false, cl).getMethod("getDriver");
         Log.debug("[LabVehiclePhysics] dead bodies under a driven vehicle stop being ragdolls at once "

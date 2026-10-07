@@ -66,7 +66,7 @@ converts them to game units.
 |---|---|---|---|
 | `mass` | kg | 50 – 200 000 | curb weight, or combat weight for armour |
 | `power` | hp | 1 – 5 000 | passport engine power |
-| `maxSpeed` | km/h | 1 – 400 | the game caps every vehicle at about 122 km/h |
+| `maxSpeed` | km/h | 1 – 400 | real top speed; the game caps every vehicle at about 122 km/h |
 | `tank` | litres | 1 – 5 000 | fuel tank capacity |
 | `lowGear` | ratio | 1 – 10 | extra pull when starting off, see below |
 | `lowGearTo` | km/h | 1 – 200 | speed where `lowGear` has faded out; default 30 |
@@ -75,11 +75,13 @@ converts them to game units.
 
 **Brakes** are not a field: they scale with mass automatically.
 
-**`lowGear`.** Project Zomboid's engine model has no torque converter and no low
-range, so a heavy vehicle has half its rated pull at idle and may not start moving
-against resistance. If your vehicle has an automatic gearbox, give the torque
-converter's stall ratio — typically 2 to 2.5. The multiplier is full at standstill
-and fades linearly to 1 at `lowGearTo`. Light vehicles do not need it.
+**`lowGear`.** The total pull-away multiplier. Project Zomboid's engine model has no
+torque converter and no low range; its first gear only gives ×1.5, which is not enough
+for a heavy vehicle to start moving against resistance. If your vehicle has an
+automatic gearbox, give the torque converter's stall ratio — typically 2 to 2.5. The
+mod adds what first gear lacks (`lowGear` / 1.5), full at standstill and fading
+linearly to 1 at `lowGearTo`. Values up to 1.5 change nothing; light vehicles do not
+need it.
 
 ### Categories
 
@@ -102,13 +104,14 @@ Use one of them, not both.
 | your field | what the mod does |
 |---|---|
 | `mass` | becomes the vehicle's physics mass; brakes and fuel consumption scale with it |
-| `power` | engine force = 48.2 × hp, compared with your script's `engineForce` |
-| `maxSpeed` | written to the vehicle script |
+| `power` | engine force for the same pull per kilogram as the passport power-to-weight, compared with your script's `engineForce` |
+| `maxSpeed` | the vehicle ends up at this speed (the script gets `maxSpeed − 20`: the game fades the engine out over the last 20 km/h) |
 | `tank` | fuel tank capacity, kept out of the save file |
-| `lowGear` | extra engine force at low speed |
+| `lowGear` | extra engine force at low speed, on top of vanilla first gear |
 
 You do not need to know game units. If your script says `engineForce = 5600` and
-you register `power = 750`, the mod works out that the engine needs ×6.46.
+you register `power = 750` for a 52-tonne tank, the mod works out that the engine
+needs ×4.68.
 
 ---
 

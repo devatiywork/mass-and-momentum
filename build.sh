@@ -8,8 +8,10 @@
 #         NativePatch.java with --release 25 (it needs the Foreign Function & Memory API).
 # ZB_JAR  ZombieBuddy.jar. Only its @Patch annotations are needed to compile; everything in the
 #         game itself is reached through reflection, so the game jar is not needed.
-# JDK17   optional bin folder of a JDK 17 for the main code. The Workshop build used Microsoft
-#         OpenJDK 17.0.19 for the main code and Temurin 25.0.4 for NativePatch.
+# JDK17   optional bin folder of a JDK 17 for the main code and for packing the jars. The Workshop
+#         build used Microsoft OpenJDK 17.0.19 for both and Temurin 25.0.4 for NativePatch; with
+#         the same compilers the jars come out byte for byte the same (see "Verifying the Workshop
+#         jars" in README.md).
 #
 # Output:
 #   mods/<id>/42/media/java/<id>.jar   the jars, in place, as the Workshop layout expects
@@ -35,14 +37,29 @@ winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else pr
 rm -rf build dist
 mkdir -p build
 
+sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
+
+# Reproducible jars: the same classes always give the same bytes, so a rebuild can be compared
+# with the Workshop jar by SHA-256. Entries go in as a sorted list (not in file system order),
+# with a fixed date, our own manifest (no jar tool version in it) and no compression (no zlib
+# version in the bytes).
+JAR_DATE="2026-01-01T00:00:00Z"
+printf 'Manifest-Version: 1.0\r\nCreated-By: Mass & Momentum reproducible build\r\n\r\n' > build/MANIFEST.MF
+
 # The same classes as the Workshop jars. Lab-only tools are left out: DevBuild (marker that
 # turns on the detailed log) and VehicleService (repair/refuel by a cfg key, for testing).
 release_jar() {  # <id> <package dir>
-    local id="$1" pkg="$2"
+    local id="$1" pkg="$2" jar out manifest
+    jar="mods/$id/42/media/java/$id.jar"
     rm -f "build/$id/classes/pz/$pkg"/DevBuild*.class "build/$id/classes/pz/$pkg"/VehicleService*.class
     mkdir -p "mods/$id/42/media/java"
-    "$JDK/jar" --create --file "mods/$id/42/media/java/$id.jar" -C "build/$id/classes" .
-    echo "    $id.jar: $("$JDK/jar" --list --file "mods/$id/42/media/java/$id.jar" | grep -c '\.class$') classes"
+    rm -f "$jar"
+    out="$(winpath "$(pwd)/$jar")"
+    manifest="$(winpath "$(pwd)/build/MANIFEST.MF")"
+    # shellcheck disable=SC2046
+    (cd "build/$id/classes" && "$JDK17/jar" --create --no-compress --date="$JAR_DATE" --manifest="$manifest" \
+        --file "$out" $(find . -type f -name '*.class' | sed 's|^\./||' | LC_ALL=C sort))
+    echo "    $id.jar: $("$JDK17/jar" --list --file "$out" | grep -c '\.class$') classes, SHA-256 $(sha256 "$jar")"
 }
 
 echo "--- Mass & Momentum: Vehicle Physics"

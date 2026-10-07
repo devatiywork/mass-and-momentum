@@ -1,5 +1,6 @@
 package pz.labvehicle;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
@@ -16,12 +17,19 @@ import java.lang.reflect.Method;
  * entirely through reflection.
  *
  * Handling of a missing class lives here too: if for some reason {@code NativePatch} was not
- * built or the JVM is older than 22, the mod keeps working with the vanilla suspension ceiling.
+ * built or the JVM is older than 22, the mod keeps working with the vanilla suspension ceiling,
+ * and {@link SuspensionCap} caps the masses to it.
  */
 public final class NativeBridge {
 
+    /** Lab switch: leave the limit in place on Windows too, to try the fallback there. */
+    public static final boolean SKIP = Boolean.getBoolean("labvehicle.noNativePatch");
+
     public static volatile boolean broken = false;
+    /** Whether the limit was lifted: null until the first attempt, then true or false. */
+    public static volatile Boolean lifted = null;
     public static Method mEnsure;
+    public static Field fDone, fFailed;
 
     private NativeBridge() {
     }
@@ -30,13 +38,29 @@ public final class NativeBridge {
         if (broken) {
             return;
         }
+        if (SKIP) {
+            if (lifted == null) {
+                lifted = Boolean.FALSE;
+                Log.info("[LabVehiclePhysics] in-memory suspension patch skipped (-Dlabvehicle.noNativePatch=true)");
+            }
+            return;
+        }
         try {
             if (mEnsure == null) {
-                mEnsure = Class.forName("pz.labvehicle.NativePatch").getMethod("ensure");
+                Class<?> patch = Class.forName("pz.labvehicle.NativePatch");
+                mEnsure = patch.getMethod("ensure");
+                fDone = patch.getField("done");
+                fFailed = patch.getField("failed");
             }
             mEnsure.invoke(null);
+            if (fFailed.getBoolean(null)) {
+                lifted = Boolean.FALSE;
+            } else if (fDone.getBoolean(null)) {
+                lifted = Boolean.TRUE;
+            }
         } catch (Throwable t) {
             broken = true;
+            lifted = Boolean.FALSE;
             Log.info("[LabVehiclePhysics] in-memory suspension patch unavailable (" + t
                     + ") - the game keeps the vanilla 2400 kg ceiling");
         }
