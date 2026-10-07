@@ -15,15 +15,9 @@ description=[*][b]Ragdolls[/b]: every player turns on Options / Display & Perfor
 description=[/list]
 description=The mod only works on servers that list it. Elsewhere your game stays vanilla, no advantage where it was not invited.
 description=
-description=[h2]New in 1.0.3[/h2]
-description=[list]
-description=[*][b]Linux, Steam Deck, macOS[/b]: the suspension limit is lifted only on Windows so far. Elsewhere a vehicle now gets the heaviest mass the stock suspension carries instead of sinking.
-description=[*]Heavy vans and SUVs no longer sit with their wheels in the ground: a vehicle whose suspension travel is too short for its weight gets a longer one.
-description=[*][b]Acceleration[/b]: engines were 1.4 times too strong. Vanilla vehicles keep their own top speed, modded ones reach their real one.
-description=[*]Zombies hit by a vehicle no longer stay standing, as a standing corpse or after ploughing through a big crowd online.
-description=[*][b]Fuel[/b]: vehicles without tank data no longer get a 570-litre tank.
-description=[*]The Workshop jars rebuild byte for byte from the GitHub source, SHA-256 in CHECKSUMS.md.
-description=[/list]
+description=[h2]New in 1.0.4[/h2]
+description=[b]Important fix.[/b] Without the optional Multiplayer Ragdolls mod, half of the main mod silently did not load: heavy vans and pickups sank at the rear and would not drive forward, and crowds, trees, bushes and fuel tanks stayed vanilla. If you saw that, update.
+description=[b]1.0.3[/b]: heavy vans and SUVs no longer sit with their wheels in the ground; engines were 1.4 times too strong; zombies hit by a vehicle no longer stay standing; no more 570-litre tanks on vehicles without tank data; on Linux, Steam Deck and macOS a vehicle gets the heaviest mass the stock suspension carries; the jars rebuild byte for byte from GitHub (CHECKSUMS.md).
 description=
 description=[h2]What changes[/h2]
 description=[list]
@@ -64,7 +58,7 @@ description=[b]Совместим с [url=https://steamcommunity.com/sharedfiles
 description=[b]Исходный код (MIT):[/b] [url=https://github.com/devatiywork/mass-and-momentum]GitHub[/url]
 description=Нужны Build 42.21 и [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3619862853]ZombieBuddy[/url] с установщиком. Выделенному серверу ZombieBuddy нужен тоже, на кооп-сервер мод добавит его сам: включите моды и в главном меню, Java-моды одобрите с «запомнить».
 description=[b]Рэгдоллы[/b]: каждому игроку включить Настройки / «Экран и производительность» / [b]«Использовать рэгдолл-физику»[/b]. В сети галка показана снятой, и «Применить» её выключает — проверьте один раз. Серверу — [b]UsePhysicsHitReaction=true[/b].
-description=[b]Новое в 1.0.3[/b]: на Linux, Steam Deck и macOS машина получает наибольшую массу, которую держит штатная подвеска, и не проседает. Тяжёлые фургоны и внедорожники не стоят колёсами в земле. Двигатели были в 1,4 раза сильнее нужного; ванильные машины держат свою максималку, модовые выходят на настоящую. Сбитые зомби не остаются стоять. Машины без данных о баке не получают бак на 570 л. Jar собираются из исходников на GitHub байт в байт.
+description=[b]Новое в 1.0.4[/b]: важный фикс. Без необязательного мода рэгдоллов половина основного мода молча не загружалась: тяжёлые фургоны и пикапы проседали и не ехали вперёд, толпа, деревья и баки работали как в ванили. Если видели такое — обновитесь. [b]1.0.3[/b]: фургоны не стоят колёсами в земле, двигатели были в 1,4 раза сильнее нужного, сбитые зомби не остаются стоять, нет баков на 570 л.
 description=[list]
 description=[*][b]Массы[/b] ванильных машин, военных модов и KI5; остальные сохраняют свой вес, любой можно назначить пресет по типу на странице песочницы.
 description=[*][b]Наезд[/b] — от скорости и приведённой массы, FPS не влияет. [b]Кусты[/b] забирают энергию, тяжёлая машина валит [b]деревья[/b].

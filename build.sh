@@ -62,6 +62,19 @@ release_jar() {  # <id> <package dir>
     echo "    $id.jar: $("$JDK17/jar" --list --file "$out" | grep -c '\.class$') classes, SHA-256 $(sha256 "$jar")"
 }
 
+# Every patched class must be in Main.PRELOAD: ZombieBuddy patches only the classes that are
+# already loaded at its pass (see Main.java). Up to 1.0.3 BaseVehicle and VehiclePart were missing
+# there, and the vehicle patches worked only when the ragdoll mod happened to load them first.
+check_preload() {  # <id> <package dir>
+    local missing="" c
+    for c in $(grep -ho '@Patch(className = "[^"]*"' "mods/$1/src/pz/$2"/*.java | sed 's/.*"\(.*\)"/\1/' | sort -u); do
+        grep -q "\"$c\"" "mods/$1/src/pz/$2/Main.java" || missing="$missing $c"
+    done
+    [ -z "$missing" ] || { echo "patched classes missing from $1 Main.PRELOAD:$missing" >&2; exit 1; }
+}
+check_preload LabVehiclePhysics labvehicle
+check_preload LabRagdollMP labragdoll
+
 echo "--- Mass & Momentum: Vehicle Physics"
 mkdir -p build/LabVehiclePhysics/classes
 MAIN_SRC=$(ls mods/LabVehiclePhysics/src/pz/labvehicle/*.java | grep -v 'NativePatch.java')

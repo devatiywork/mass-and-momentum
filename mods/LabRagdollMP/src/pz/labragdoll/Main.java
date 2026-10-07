@@ -9,6 +9,9 @@ public class Main {
     public static final String[] PRELOAD = {
         // Co-op server with ZombieBuddy: launching the server from the "Host" menu.
         "zombie.network.CoopMaster",
+        // Loaded by the game long before us so far; every patched class is listed (build.sh checks).
+        "zombie.characters.IsoGameCharacter",
+        "zombie.core.Core",
     };
 
     public static void main(String[] args) {

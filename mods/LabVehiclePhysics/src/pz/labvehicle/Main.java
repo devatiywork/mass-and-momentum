@@ -22,10 +22,28 @@ public class Main {
      * [ZB] Scanned 22 classes in package pz.labvehicle
      * [ZB] Found patch class: ...         ← the patcher pass
      * </pre>
-     * main() runs before the pass. So it is enough to touch the classes here, and by
-     * the time of the pass they are loaded just like BaseVehicle.
+     * main() runs before the pass. So it is enough to touch the classes here.
+     *
+     * EVERY class we patch must be in this list; build.sh refuses to build otherwise. Until 1.0.4
+     * BaseVehicle, VehiclePart and RagdollController were missing: they seemed loaded anyway. They
+     * were, but only thanks to LabRagdollMP. Its pass comes first and retransforms
+     * IsoGameCharacter, and resolving that class's methods (onHitByVehicle(BaseVehicle, …)) loads
+     * the vehicle classes on the side. Without LabRagdollMP, the optional mod, they get loaded on
+     * the side of OUR pass instead, while IsoGameCharacter is being transformed, and a class loaded
+     * during a transformation is not transformed itself. Every patch on a vehicle and its parts
+     * then silently did nothing: no suspension limit lifted, so the masses from the table sank
+     * the vans and pickups; no crowd, floor, trees, bushes, corpses under the hull, fuel tanks.
+     * Reported from singleplayer without the ragdoll mod (Workshop, 07.10.2026).
      */
     public static final String[] PRELOAD = {
+        // The vehicle itself, its parts (fuel tank) and the ragdoll under it.
+        "zombie.vehicles.BaseVehicle",
+        "zombie.vehicles.VehiclePart",
+        "zombie.core.physics.RagdollController",
+        // Loaded by the game long before us so far, listed so that this stays true.
+        "zombie.characters.IsoGameCharacter",
+        "zombie.iso.IsoMovingObject",
+        "zombie.inventory.InventoryItem",
         "zombie.core.physics.CarController",
         "zombie.scripting.objects.VehicleScript",
         // Animal hits: damage in singleplayer and on the server.
